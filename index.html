@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>光合作用動態展示 | Photosynthesis Demo</title>
+  <meta name="description" content="光合作用與養分分配動態展示：氣孔與保衛細胞、水木質部上升、葡萄糖合成後分流運送至根部儲存、花朵發育或果實積累。">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@600;700;900&family=Outfit:wght@700;800&family=JetBrains+Mono:wght@700;800&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <!-- 頂部大字標題與化學式看板 -->
+  <header class="main-header">
+    <div class="brand">
+      <span class="brand-icon">🌱</span>
+      <div class="brand-title">
+        <h1>光合作用與養分輸導展示</h1>
+        <span class="brand-sub">Photosynthesis & Source-Sink Nutrient Allocation</span>
+      </div>
+    </div>
+
+    <!-- 大字體化學方程式看板 -->
+    <div class="equation-display">
+      <span class="eq-item" id="eqCO2">6 CO₂</span>
+      <span class="eq-op">+</span>
+      <span class="eq-item" id="eqH2O">6 H₂O</span>
+      <span class="eq-arrow">➔ 光能 ➔</span>
+      <span class="eq-item" id="eqGlucose">C₆H₁₂O₆ (葡萄糖)</span>
+      <span class="eq-op">+</span>
+      <span class="eq-item" id="eqO2">6 O₂ ↑</span>
+    </div>
+  </header>
+
+  <!-- 主工作區：左側大畫布 + 右側集中控制面板 -->
+  <main class="app-layout">
+    <!-- 左側展示畫布區 -->
+    <section class="canvas-section">
+      <canvas id="simCanvas" width="1320" height="740"></canvas>
+    </section>
+
+    <!-- 右側集中所有按鈕操作面板 (所有 UI 集中於此) -->
+    <aside class="sidebar-panel">
+      <!-- 區塊 1：核心演示控制 -->
+      <div class="panel-card">
+        <div class="panel-header-row">
+          <h2 class="card-heading">演示控制</h2>
+          <span id="loopIndicator" class="loop-badge active" title="光合作用過程自動循環狀態">
+            <span class="loop-dot"></span>
+            <span id="loopBadgeText">自動重複中</span>
+          </span>
+        </div>
+        <div id="loopStatusDetail" class="loop-status-detail">
+          <span class="loop-icon">🔄</span>
+          <span id="loopStatusText">光合作用自動循環：第 <strong>1</strong> 輪運行中</span>
+        </div>
+        <div class="btn-vertical-group">
+          <button id="playBtn" class="primary-btn-lg playing" title="點擊暫停或恢復自動重複執行">
+            <span class="btn-icon">⏸️</span> 暫停自動重複
+          </button>
+          <button id="resetBtn" class="secondary-btn-lg" title="重置畫面與計數">
+            <span>重置畫面</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 區塊 2：光照環境與氣孔狀態 (照光開啟 / 黑暗關閉) -->
+      <div class="panel-card">
+        <h2 class="card-heading">光照環境與氣孔</h2>
+        <p class="panel-hint">照光時氣孔張開；黑暗時氣孔自動閉合：</p>
+        <button id="toggleLightBtn" class="light-toggle-btn day" title="點擊切換照光(氣孔開)或黑暗(氣孔關)">
+          <span id="lightIcon">☀️</span>
+          <span id="lightStatusText">日間照光（氣孔開啟）</span>
+        </button>
+      </div>
+
+      <!-- 區塊 3：養分輸導與去向 (長途運送皆為蔗糖，到器官才轉化) -->
+      <div class="panel-card">
+        <h2 class="card-heading">養分輸導與去向</h2>
+        <p class="panel-hint">轉化為【蔗糖】經韌皮部運送，抵達器官後轉化：</p>
+        <div class="fate-vertical-group">
+          <button id="fateRootBtn" class="fate-btn-lg active" data-fate="root" title="以蔗糖沿韌皮部運送至根部，轉化為澱粉儲藏">
+            <span class="fate-icon">🥔</span>
+            <div class="fate-info">
+              <strong>運往根部 ➔ 轉化為澱粉</strong>
+              <small>以蔗糖運送，根部縮合為澱粉</small>
+            </div>
+          </button>
+
+          <button id="fateFlowerBtn" class="fate-btn-lg" data-fate="flower" title="以蔗糖沿韌皮部運送至花朵，轉化為開花能量與花蜜">
+            <span class="fate-icon">🌸</span>
+            <div class="fate-info">
+              <strong>運往花朵 ➔ 轉化為花蜜</strong>
+              <small>以蔗糖運送，提供能量與花蜜</small>
+            </div>
+          </button>
+
+          <button id="fateFruitBtn" class="fate-btn-lg" data-fate="fruit" title="以蔗糖沿韌皮部運送至果實，轉化為果糖並膨大">
+            <span class="fate-icon">🍎</span>
+            <div class="fate-info">
+              <strong>運往果實 ➔ 轉化為果糖</strong>
+              <small>以蔗糖運送，積累果糖與膨大</small>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <!-- 區塊 4：根部儲存養分再動員 (轉運至花或果實) -->
+      <div class="panel-card remobilize-card">
+        <h2 class="card-heading">🔄 根部養分轉運 (再動員)</h2>
+        <p class="panel-hint">澱粉水解為【蔗糖】，沿韌皮部向上運送至器官：</p>
+        <div class="btn-vertical-group">
+          <button id="rootToFlowerBtn" class="remobilize-btn flower-remobilize" title="根部澱粉水解為蔗糖，沿韌皮部向上輸送至花朵轉化為花蜜">
+            <span class="btn-icon">🌸</span>
+            <div class="fate-info">
+              <strong>根部澱粉 ➔ 水解蔗糖運往花朵</strong>
+              <small>水解為蔗糖上行，轉化為花蜜</small>
+            </div>
+          </button>
+
+          <button id="rootToFruitBtn" class="remobilize-btn fruit-remobilize" title="根部澱粉水解為蔗糖，沿韌皮部向上輸送至果實轉化為果糖">
+            <span class="btn-icon">🍎</span>
+            <div class="fate-info">
+              <strong>根部澱粉 ➔ 水解蔗糖運往果實</strong>
+              <small>水解為蔗糖上行，轉化為果糖</small>
+            </div>
+          </button>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+
+</html>
