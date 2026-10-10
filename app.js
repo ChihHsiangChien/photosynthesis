@@ -1,10 +1,11 @@
 /**
  * 光合作用與晝夜養分輸導引擎 | Photosynthesis & Day-Night Translocation Engine
  * 特色：
- * 1. 日間照光：合成葡萄糖後縮合為「暫時性澱粉」暫存於葉綠體內。
- * 2. 夜間黑暗：氣孔閉合，葉綠體暫存澱粉水解為「蔗糖」，經韌皮部轉運至各庫器官（根/花/果）。
- * 3. 完整晝夜節律自動循環展示與手動光照切換。
- * 4. 嚴格遵循木質部（水分上行）與韌皮部（蔗糖分流至庫器官）專屬路徑。
+ * 1. 韌皮部長途養分運輸為 24 小時晝夜持續進行。
+ * 2. 日間照光：固定碳在細胞質即時合成「蔗糖」，經韌皮部裝載（Phloem loading）立即運往各庫器官（根/花/果/頂芽）。
+ * 3. 葉綠體暫存澱粉（蓄洪機制）：日間光合速率大於即時運輸負荷，多餘碳合成不溶性「暫時性澱粉」暫存，避免高滲透壓。
+ * 4. 夜間黑暗：氣孔閉合，葉綠體暫存澱粉水解為「蔗糖」，經韌皮部接續轉運，確保庫器官 24 小時晝夜獲得穩定能量。
+ * 5. 嚴格遵循木質部（水分上行）與韌皮部（蔗糖分流至庫器官）專屬路徑。
  */
 
 (function () {
@@ -13,8 +14,10 @@
   // 狀態管理
   const state = {
     fate: 'root', // 'root' | 'flower' | 'fruit' | 'shoot'
-    isPlaying: false,
-    isAutoMode: true, // 運行模式：true 為自動模式 (自動切換日夜並執行所有步驟)，false 為手動單步模式
+    isPlaying: true,
+    runMode: 'parallel', // 'parallel' (真實生理) | 'auto' (自動分步) | 'manual' (手動單步)
+    isParallelMode: true, // 真實生理模式：日照時所有步驟動畫同時並行
+    isAutoMode: false,
     isStepMode: false,
     currentStep: 0, // 當前單步階段 (1 ~ 8)
     loopCount: 1, // 當前循環輪次
@@ -28,12 +31,20 @@
 
     // 累積生長/儲存量
     leafStarchCount: 0, // 葉綠體暫時性澱粉儲存量 (日間合成暫存，夜間水解轉運)
+    autoLoopTargetStarch: 3, // 自動循環模式下日間累積暫存澱粉目標 (累積至 3 顆後轉入夜間轉運)
     rootStarchCount: 0,
     flowerEnergyCount: 0,
     fruitSugarCount: 0,
     shootEnergyCount: 0,
     shootGrowthPulse: 0,       // 頂芽生長/細胞分裂光波脈衝
     rootEmptyAlertPulse: 0,
+
+    // 真實生理模式粒子生成節奏計時器
+    lastParallelCO2Spawn: 0,
+    lastParallelH2OSpawn: 0,
+    lastParallelO2Spawn: 0,
+    lastParallelPhloemSpawn: 0,
+    lastParallelStarchSpawn: 0,
 
     // 顯微特寫視窗模式 ('guardCell' | 'chloroplast')
     insetMode: 'guardCell',
@@ -75,6 +86,7 @@
   const ctx = canvas.getContext('2d');
 
   // 集中控制區按鈕
+  const modeParallelBtn = document.getElementById('modeParallelBtn');
   const modeAutoBtn = document.getElementById('modeAutoBtn');
   const modeManualBtn = document.getElementById('modeManualBtn');
   const lightDayBtn = document.getElementById('lightDayBtn');
@@ -109,6 +121,7 @@
   const eqLightArrow = document.getElementById('eqLightArrow');
   const eqGlucose = document.getElementById('eqGlucose');
   const eqO2 = document.getElementById('eqO2');
+  const eqH2Oproduct = document.getElementById('eqH2Oproduct');
   const eqPolyArrow = document.getElementById('eqPolyArrow');
   const eqStarch = document.getElementById('eqStarch');
 
@@ -202,8 +215,22 @@
     if (eqLightArrow) eqLightArrow.className = 'eq-arrow';
     if (eqGlucose) eqGlucose.className = 'eq-item';
     if (eqO2) eqO2.className = 'eq-item';
+    if (eqH2Oproduct) eqH2Oproduct.className = 'eq-item';
     if (eqPolyArrow) eqPolyArrow.className = 'eq-arrow';
     if (eqStarch) eqStarch.className = 'eq-item';
+  }
+
+  // 真實生理模式：日間所有參與光合作用之反應物與產物同時高亮發光
+  function highlightAllDaytimeEquations() {
+    resetEquationHighlights();
+    if (eqCO2) eqCO2.classList.add('active-co2');
+    if (eqH2O) eqH2O.classList.add('active-h2o');
+    if (eqLightArrow) eqLightArrow.classList.add('active-poly');
+    if (eqGlucose) eqGlucose.classList.add('active-glucose');
+    if (eqO2) eqO2.classList.add('active-o2');
+    if (eqH2Oproduct) eqH2Oproduct.classList.add('active-h2o');
+    if (eqPolyArrow) eqPolyArrow.classList.add('active-poly');
+    if (eqStarch) eqStarch.classList.add('active-starch');
   }
 
   // 顯微特寫視窗模式 (固定保留氣孔保衛細胞)
@@ -245,29 +272,29 @@
     },
     {
       step: 5,
-      title: '碳反應固定 CO₂，在葉綠體基質中合成葡萄糖',
-      targetName: '葉綠體 (基質)',
-      organX: geo.chloroplastX,
-      organY: geo.chloroplastY
+      title: '碳反應固定 CO₂ 合成醣類，即時轉化為蔗糖經韌皮部裝載運往庫器官 (日間即時供應)',
+      targetName: '韌皮部裝載與即時運輸',
+      organX: geo.phloemStemX,
+      organY: geo.leafCenterY
     },
     {
       step: 6,
-      title: '葡萄糖脫水縮合聚合為【暫時性澱粉】暫存葉綠體',
-      targetName: '葉綠體 (基質澱粉粒)',
+      title: '日間光合速率大於即時運輸負荷，多餘碳聚合為【暫時性澱粉】「蓄洪」暫存',
+      targetName: '葉綠體暫存澱粉 (蓄洪)',
       organX: geo.chloroplastX,
       organY: geo.chloroplastY
     },
     {
       step: 7,
-      title: '夜幕降臨失去光照，保衛細胞失水萎縮，氣孔完全閉合',
+      title: '夜幕降臨失去光照，保衛細胞失水萎縮，氣孔完全閉合（光反應停止）',
       targetName: '氣孔 (夜間閉合)',
       organX: geo.stomaX,
       organY: geo.stomaY
     },
     {
       step: 8,
-      title: '葉綠體澱粉水解為蔗糖，經韌皮部轉運至目標器官儲存',
-      targetName: '韌皮部篩管與庫器官',
+      title: '夜間葉綠體澱粉水解為蔗糖，韌皮部接續運送（確保 24 小時晝夜穩定供能）',
+      targetName: '韌皮部夜間接續轉運',
       organX: geo.phloemStemX + 45,
       organY: geo.soilY + 30
     }
@@ -292,11 +319,14 @@
   }
 
   function updateModeButtons() {
+    if (modeParallelBtn) {
+      modeParallelBtn.classList.toggle('active', state.runMode === 'parallel');
+    }
     if (modeAutoBtn) {
-      modeAutoBtn.classList.toggle('active', state.isAutoMode);
+      modeAutoBtn.classList.toggle('active', state.runMode === 'auto');
     }
     if (modeManualBtn) {
-      modeManualBtn.classList.toggle('active', !state.isAutoMode);
+      modeManualBtn.classList.toggle('active', state.runMode === 'manual');
     }
   }
 
@@ -310,53 +340,61 @@
   }
 
   function updateLoopStatusUI(stepNote) {
-    
+    if (!loopIndicator || !loopBadgeText) return;
 
     if (state.isTranspirationMode) {
       loopIndicator.className = 'loop-badge transpiration-active';
       loopBadgeText.textContent = '蒸散作用中';
-
       return;
     }
 
-    if (state.isAutoMode) {
+    if (state.runMode === 'parallel') {
+      loopIndicator.className = 'loop-badge active parallel';
+      loopBadgeText.textContent = state.isDay ? '真實生理並行中' : '夜間接續轉運中';
+    } else if (state.runMode === 'auto') {
       loopIndicator.className = 'loop-badge active';
-      loopBadgeText.textContent = state.isDay ? '自動循環中 (日間)' : '自動循環中 (夜間)';
-
+      loopBadgeText.textContent = state.isDay ? '自動分步中 (日間)' : '自動分步中 (夜間)';
     } else {
       loopIndicator.className = 'loop-badge step-mode';
-      loopBadgeText.textContent = state.isDay ? '手動模式 (日間)' : '手動模式 (夜間)';
-      const cur = state.currentStep || 1;
-      const starchNote = `【葉綠體澱粉: ${state.leafStarchCount}/5${state.leafStarchCount >= 5 ? ' 飽和' : ''}】`;
-
+      loopBadgeText.textContent = state.isDay ? '手動單步 (日間)' : '手動單步 (夜間)';
     }
   }
 
-  // 運行模式切換 (自動循環 vs 手動單步)
+  // 運行模式切換 (真實生理 vs 自動分步 vs 手動單步)
   function setRunMode(mode) {
     if (state.isTranspirationMode) {
       setTranspirationMode(false);
     }
-    if (mode === 'auto') {
-      state.isAutoMode = true;
-      state.isStepMode = false;
-      updateModeButtons();
-      updateLoopStatusUI();
+    clearAllTimers();
+    state.loopNextTimerId = null;
 
-      clearAllTimers();
-      state.loopNextTimerId = null;
-      if (state.isDay) {
-        executeStep(state.currentStep > 0 && state.currentStep <= 6 ? state.currentStep : 1, true);
-      } else {
-        executeStep(state.currentStep >= 7 && state.currentStep <= 8 ? state.currentStep : 7, true);
-      }
+    state.runMode = mode;
+    state.isParallelMode = (mode === 'parallel');
+    state.isAutoMode = (mode === 'auto');
+    state.isStepMode = (mode === 'manual');
+
+    updateModeButtons();
+
+    if (mode === 'parallel') {
+      // 進入真實生理全反應模式：日間所有反應同時並行
+      state.isPlaying = true;
+      state.currentStep = 0;
+      setDayNightMode(true, true);
+      state.stomaOpen = true;
+      state.stomaAperture = 1.0;
+      highlightAllDaytimeEquations();
+      updateLoopStatusUI();
+    } else if (mode === 'auto') {
+      // 進入自動分步循環：由步驟 1 到步驟 8 逐步推進
+      state.isPlaying = true;
+      resetEquationHighlights();
+      setDayNightMode(true, true);
+      executeStep(1, true);
     } else {
-      state.isAutoMode = false;
-      state.isStepMode = true;
-      clearAllTimers();
-      state.loopNextTimerId = null;
-      updateModeButtons();
-      updateLoopStatusUI('已切換為【手動單步模式】：由您自由點擊【單步演示 (下一步)】推進步驟');
+      // 手動單步：由使用者自主點擊下一步推進
+      state.isPlaying = false;
+      resetEquationHighlights();
+      updateLoopStatusUI();
     }
   }
 
@@ -528,10 +566,11 @@
       }
 
       case 4: {
-        // 階段 4：葉綠體光反應吸收光能裂解水，釋出 O2 經氣孔逸散
+        // 階段 4：葉綠體光反應吸收光能裂解水，釋出 O2 經氣孔逸散，生成水產物
         if (!state.isDay) setDayNightMode(true, true);
         if (eqLightArrow) eqLightArrow.classList.add('active-poly');
         eqO2.classList.add('active-o2');
+        if (eqH2Oproduct) eqH2Oproduct.classList.add('active-h2o');
         state.chloroplastPulse = 1.0;
 
         for (let i = 0; i < 12; i++) {
@@ -561,7 +600,7 @@
       }
 
       case 5: {
-        // 階段 5：卡爾文循環固定 CO2，在基質中合成葡萄糖 (C6H12O6)
+        // 階段 5：碳反應固定 CO2 生成醣類，部分即時轉化為蔗糖經韌皮部裝載 (Phloem loading) 立即外運
         if (!state.isDay) setDayNightMode(true, true);
         eqGlucose.classList.add('active-glucose');
         state.chloroplastPulse = 1.0;
@@ -592,13 +631,24 @@
           }, i * 140);
         }
 
+        // 白天即時蔗糖運輸 (Phloem Loading)：大量固定的碳即時轉化為蔗糖送往庫器官
+        scheduleTimer(() => {
+          dispatchDaytimeTranslocation(1, fromAutoLoop);
+        }, 400);
 
-        updateLoopStatusUI('碳反應固定 CO₂，在葉綠體基質中合成葡萄糖');
+        const destName = {
+          root: '地下塊根 (即時儲藏)',
+          flower: '花朵 (即時提供代謝與開花)',
+          fruit: '果實 (即時積累果糖)',
+          shoot: '頂芽 (即時支持分裂伸長)'
+        }[state.fate] || '庫器官';
+
+        updateLoopStatusUI(`【碳反應與即時運送】固定 CO₂ 合成醣類，部分即時轉化為蔗糖經韌皮部裝載運往${destName}！(韌皮部 24h 持續運送)`);
 
         if (fromAutoLoop && state.isAutoMode) {
           state.loopNextTimerId = scheduleTimer(() => {
             if (state.isAutoMode) executeStep(6, true);
-          }, 1900);
+          }, 2100);
         } else {
           state.isPlaying = false;
         }
@@ -606,7 +656,7 @@
       }
 
       case 6: {
-        // 階段 6：葡萄糖脫水縮合，聚合為暫時性澱粉粒暫存葉綠體 (持續累積至飽和上限 5 顆)
+        // 階段 6：光合速率大於即時運輸負荷，多餘碳聚合為【暫時性澱粉】「蓄洪」暫存於葉綠體
         if (!state.isDay) setDayNightMode(true, true);
         if (eqPolyArrow) eqPolyArrow.classList.add('active-poly');
         if (eqStarch) eqStarch.classList.add('active-starch');
@@ -626,10 +676,6 @@
           });
         }
 
-        const willSaturate = state.leafStarchCount >= 4;
-        const isSaturated = state.leafStarchCount >= 5;
-
-
         scheduleTimer(() => {
           if (state.leafStarchCount < 5) {
             state.leafStarchCount++;
@@ -639,15 +685,35 @@
           state.synthesisFlash = 1.0;
         }, 1500);
 
-        if (willSaturate || isSaturated) {
-          updateLoopStatusUI('【暫存澱粉已達飽和上限 (5/5)】基質空間已滿（避免高滲透壓），請切換至【夜間黑暗】轉運！');
+        const currentCountDisplay = Math.min(5, state.leafStarchCount + 1);
+        const willReachAutoTarget = currentCountDisplay >= state.autoLoopTargetStarch;
+
+        if (state.isAutoMode) {
+          if (willReachAutoTarget) {
+            updateLoopStatusUI(`【暫存澱粉蓄洪充足 (${currentCountDisplay}/${state.autoLoopTargetStarch} 顆)】日間過量碳已充分蓄存，即將進入夜間將養分水解接續供應庫器官！`);
+          } else {
+            updateLoopStatusUI(`【光合產量超出即時運輸負荷】多餘碳在葉綠體聚合為【暫時性澱粉】蓄洪（已累積：${currentCountDisplay}/${state.autoLoopTargetStarch} 顆，繼續日間光合固碳）`);
+          }
         } else {
-          updateLoopStatusUI(`葡萄糖聚合為【暫時性澱粉】（目前累積：${state.leafStarchCount + 1}/5 顆）`);
+          if (currentCountDisplay >= 5) {
+            updateLoopStatusUI('【暫存澱粉已達蓄洪上限 (5/5)】避免高滲透壓；日間光合產量大於外運負荷，夜間將水解接續供應！');
+          } else {
+            updateLoopStatusUI(`【光合產量超出即時運輸負荷】多餘碳在葉綠體聚合為【暫時性澱粉】「蓄洪」暫存（目前蓄存：${currentCountDisplay}/5 顆）`);
+          }
         }
 
         if (fromAutoLoop && state.isAutoMode) {
           state.loopNextTimerId = scheduleTimer(() => {
-            if (state.isAutoMode) executeStep(7, true);
+            if (state.isAutoMode) {
+              if (state.leafStarchCount < state.autoLoopTargetStarch) {
+                // 還沒達到 3 顆目標：日間持續光照，氣孔維持開放，循環回步驟 2 進行下一輪固碳合成！
+                state.currentStep = 2;
+                executeStep(2, true);
+              } else {
+                // 已累積達 3 顆：進入夜幕降臨 (步驟 7)
+                executeStep(7, true);
+              }
+            }
           }, 2400);
         } else {
           state.isPlaying = false;
@@ -662,8 +728,7 @@
         setInsetMode('guardCell');
         resetEquationHighlights();
 
-
-        updateLoopStatusUI('夜幕降臨失去光照，保衛細胞失水萎縮，氣孔完全閉合');
+        updateLoopStatusUI('夜幕降臨失去光照，保衛細胞失水萎縮，氣孔完全閉合（光反應停止，即將由暫存澱粉水解接續供能）');
 
         if (fromAutoLoop && state.isAutoMode) {
           state.loopNextTimerId = scheduleTimer(() => {
@@ -676,7 +741,7 @@
       }
 
       case 8: {
-        // 階段 8：葉綠體澱粉水解為蔗糖，經韌皮部篩管轉運至器官儲存 (黑暗模式下將目前所有澱粉全數轉移送出)
+        // 階段 8：葉綠體澱粉水解為蔗糖，經韌皮部篩管轉運至器官儲存 (確保 24h 穩定供能)
         if (state.isDay) setDayNightMode(false, true);
 
         // 如果在自動模式下且計數為 0，預設轉運 1 顆以供演示；手動模式下轉運所有累積的澱粉
@@ -684,18 +749,14 @@
         state.chloroplastPulse = 0.8;
 
         if (totalToTransfer > 0) {
-          // 不在此處立即歸零，改在 dispatchNightTranslocation 中隨轉運動畫逐顆消失
-          // state.leafStarchCount = 0; 
-
-
           const destName = {
-            root: '地下塊根 (縮合為澱粉)',
-            flower: '花朵 (轉化為花蜜與能量)',
-            fruit: '果實 (轉化為果糖膨大)',
-            shoot: '頂芽 (轉化為纖維素支持生長)'
+            root: '地下塊根 (縮合儲存澱粉)',
+            flower: '花朵 (維持夜間代謝與花蜜)',
+            fruit: '果實 (持續積累果糖)',
+            shoot: '頂芽 (夜間細胞壁合成伸長)'
           }[state.fate] || '目標器官';
 
-          updateLoopStatusUI(`【夜間轉運】葉綠體暫存澱粉 (共 ${totalToTransfer} 顆) 已全數水解為蔗糖，正由韌皮部轉運至${destName}...`);
+          updateLoopStatusUI(`【夜間接續轉運】葉綠體暫存澱粉 (共 ${totalToTransfer} 顆) 已水解為蔗糖，正由韌皮部接續運送至${destName}，確保庫器官 24 小時晝夜穩定供能！`);
 
           scheduleTimer(() => {
             dispatchNightTranslocation(totalToTransfer, fromAutoLoop);
@@ -728,8 +789,12 @@
     state.loopNextTimerId = null;
 
     // 手動點擊下一步時自動切換至手動單步模式
-    if (state.isAutoMode) {
+    if (state.runMode !== 'manual') {
+      state.runMode = 'manual';
+      state.isParallelMode = false;
       state.isAutoMode = false;
+      state.isStepMode = true;
+      resetEquationHighlights();
       updateModeButtons();
     }
     state.isStepMode = true;
@@ -781,25 +846,26 @@
   }
 
   // 養分到達目標庫器官時的生化轉化特效 (抵達器官時由「蔗糖」轉化為「澱粉 / 花蜜 / 果糖 / 頂芽纖維素」)
-  function triggerOrganConversion(kind, amount = 1) {
+  function triggerOrganConversion(kind, amount = 1, isDaytime = false) {
     const qtyStr = amount > 1 ? ` (+${amount})` : '';
-    let text = `蔗糖 ➔ 澱粉儲藏${qtyStr} ✨`;
+    const prefix = isDaytime ? '日間即時蔗糖' : (kind.startsWith('root_to') ? '根部水解蔗糖' : '夜間水解蔗糖');
+    let text = `${prefix} ➔ 澱粉儲藏${qtyStr} ✨`;
     let x = geo.rootTuberX;
     let y = geo.rootTuberY - 24;
     let color = '#fef08a';
 
     if (kind === 'flower' || kind === 'root_to_flower') {
-      text = `蔗糖 ➔ 花蜜與開花能量${qtyStr}`;
+      text = `${prefix} ➔ 花蜜與開花能量${qtyStr}`;
       x = geo.flowerX;
       y = geo.flowerY - 22;
       color = '#f472b6';
     } else if (kind === 'fruit' || kind === 'root_to_fruit') {
-      text = `蔗糖 ➔ 果糖積累與膨大${qtyStr}`;
+      text = `${prefix} ➔ 果糖積累與膨大${qtyStr}`;
       x = geo.fruitBranchX;
       y = geo.fruitBranchY - 22;
       color = '#f87171';
     } else if (kind === 'shoot' || kind === 'root_to_shoot') {
-      text = `蔗糖 ➔ 纖維素與頂芽生長${qtyStr}`;
+      text = `${prefix} ➔ 纖維素與頂芽生長${qtyStr}`;
       x = geo.shootX;
       const shootOffset = Math.min(state.shootEnergyCount * 9, 45);
       y = geo.shootY - shootOffset - 22;
@@ -825,7 +891,7 @@
     // 1. 第一顆蔗糖實體抵達庫器官瞬間：觸發生化轉化特效並增加器官儲備
     if (!batch.hasTriggeredConversion) {
       batch.hasTriggeredConversion = true;
-      triggerOrganConversion(batch.kind, batch.amount);
+      triggerOrganConversion(batch.kind, batch.amount, batch.isDaytime);
 
       if (batch.kind === 'root') {
         state.rootStarchCount += batch.amount;
@@ -845,18 +911,41 @@
     if (batch.particlesRemaining <= 0) {
       activeBatches.delete(t.batchId);
 
-      // 如果這是夜間轉運批次 (非根部再動員)
-      if (batch.kind === 'root' || batch.kind === 'flower' || batch.kind === 'fruit' || batch.kind === 'shoot') {
+      // 如果這是日間即時轉運批次
+      if (batch.isDaytime) {
         const destName = {
-          root: '地下塊根 (縮合儲存澱粉)',
-          flower: '花朵 (轉化花蜜與花發育)',
-          fruit: '果實 (轉化果糖與果實膨大)',
-          shoot: '頂芽 (轉化纖維素促進頂芽生長)'
+          root: '地下塊根 (即時儲藏)',
+          flower: '花朵 (即時提供代謝與開花)',
+          fruit: '果實 (即時積累果糖)',
+          shoot: '頂芽 (即時支持頂端分裂生長)'
         }[batch.kind] || '庫器官';
 
-        if (batch.fromAutoLoop && state.isAutoMode) {
-          // 關鍵保證：蔗糖完全送進庫之後，停留適當觀察時間 (1.4s) 再迎接清晨日照
-          updateLoopStatusUI(`【夜間轉運完成】所有蔗糖已完全進入${destName}！即將迎接清晨日照...`);
+        if (!batch.fromAutoLoop || !state.isAutoMode) {
+          updateLoopStatusUI(`【日間即時轉運完成】蔗糖已送達${destName}！(韌皮部 24h 晝夜持續運送)`);
+        }
+      }
+      // 如果這是夜間轉運批次 (非根部再動員)
+      else if (batch.kind === 'root' || batch.kind === 'flower' || batch.kind === 'fruit' || batch.kind === 'shoot') {
+        const destName = {
+          root: '地下塊根 (縮合儲存澱粉)',
+          flower: '花朵 (轉化花蜜與維持代謝)',
+          fruit: '果實 (轉化果糖與果實膨大)',
+          shoot: '頂芽 (細胞壁合成促進生長)'
+        }[batch.kind] || '庫器官';
+
+        if (state.runMode === 'parallel') {
+          updateLoopStatusUI(`【夜間接續轉運完成】暫存澱粉已水解送入${destName}！即將迎接清晨日照，展開新一輪真實生理反應...`);
+          state.loopNextTimerId = scheduleTimer(() => {
+            if (state.runMode === 'parallel') {
+              state.loopCount++;
+              setDayNightMode(true, true);
+              highlightAllDaytimeEquations();
+              updateLoopStatusUI();
+            }
+          }, 1500);
+        } else if (batch.fromAutoLoop && state.isAutoMode) {
+          // 蔗糖完全送進庫之後，停留適當觀察時間 (1.4s) 再迎接清晨日照
+          updateLoopStatusUI(`【夜間接續轉運完成】暫存澱粉已水解送入${destName}！韌皮部 24 小時晝夜持續運送，即將迎接清晨日照...`);
           state.loopNextTimerId = scheduleTimer(() => {
             if (state.isAutoMode) {
               state.loopCount++;
@@ -866,7 +955,7 @@
           }, 1400);
         } else {
           state.isPlaying = false;
-          updateLoopStatusUI(`【夜間轉運完成】所有蔗糖已全數送入${destName}！請點擊【日間光照】開始新一天的光合作用`);
+          updateLoopStatusUI(`【夜間接續轉運完成】暫存澱粉已全數送入${destName}！(韌皮部 24h 晝夜持續運送)`);
         }
       } else if (batch.kind === 'root_to_shoot') {
         updateLoopStatusUI(`【根部再動員完成】儲藏澱粉已水解為蔗糖，全數送達頂芽，促進新葉與節間伸長！(頂芽累計: x${state.shootEnergyCount})`);
@@ -878,12 +967,12 @@
     }
   }
 
-  // 確保在日照開始之前，若尚有在途運輸粒子，立即全數入庫結算
+  // 確保在日照開始之前，若尚有在途運輸粒子，平滑入庫結算
   function settleAllInflightTransports() {
     activeBatches.forEach(batch => {
       if (!batch.hasTriggeredConversion) {
         batch.hasTriggeredConversion = true;
-        triggerOrganConversion(batch.kind, batch.amount);
+        triggerOrganConversion(batch.kind, batch.amount, batch.isDaytime);
         if (batch.kind === 'root') {
           state.rootStarchCount += batch.amount;
           updateRemobilizeButtonStates();
@@ -900,9 +989,8 @@
     state.transports = [];
   }
 
-  // 夜間轉運：蔗糖粒子從葉綠體出發，沿韌皮部葉脈進入莖部韌皮部輸送至指定器官
-  function dispatchNightTranslocation(amount = 1, fromAutoLoop = false) {
-    const target = state.fate;
+  // 統一韌皮部長途運輸調度 (支援日間即時轉運與夜間接續轉運)
+  function dispatchPhloemTranslocation({ target = state.fate, amount = 1, isDaytime = false, fromAutoLoop = false, decreaseStarch = false }) {
     let targetWaypoints = [];
 
     const baseWaypoints = [
@@ -942,20 +1030,23 @@
     }
 
     const batchId = ++batchCounter;
-    const particleCount = 3;
+    const particleCount = decreaseStarch ? Math.min(6, 2 + amount) : 3;
 
-    // 隨時間逐漸減少葉綠體內的澱粉數
-    for (let k = 0; k < amount; k++) {
-      scheduleTimer(() => {
-        if (state.leafStarchCount > 0) state.leafStarchCount--;
-      }, k * 180 + 50); // 隨蔗糖粒子出發節奏逐漸消失
+    // 若需要從暫存澱粉水解扣除 (夜間模式)
+    if (decreaseStarch) {
+      for (let k = 0; k < amount; k++) {
+        scheduleTimer(() => {
+          if (state.leafStarchCount > 0) state.leafStarchCount--;
+        }, k * 350 + 100); // 隨蔗糖粒子出發節奏逐漸水解減少
+      }
     }
 
     activeBatches.set(batchId, {
       batchId,
       kind: target,
-      amount: amount,
-      fromAutoLoop: fromAutoLoop,
+      isDaytime,
+      amount,
+      fromAutoLoop,
       hasTriggeredConversion: false,
       particlesRemaining: particleCount
     });
@@ -965,6 +1056,7 @@
         state.transports.push({
           batchId,
           kind: target,
+          isDaytime,
           waypoints: targetWaypoints,
           segment: 0,
           segProgress: 0,
@@ -973,6 +1065,28 @@
         });
       }, i * 50);
     }
+  }
+
+  // 日間即時轉運：碳反應生成醣類在細胞質轉化為蔗糖，經韌皮部裝載立即外運 (24h 持續運輸)
+  function dispatchDaytimeTranslocation(amount = 1, fromAutoLoop = false) {
+    dispatchPhloemTranslocation({
+      target: state.fate,
+      amount,
+      isDaytime: true,
+      fromAutoLoop,
+      decreaseStarch: false
+    });
+  }
+
+  // 夜間接續轉運：水解葉綠體暫存澱粉為蔗糖，沿韌皮部接續運送 (確保夜間能量穩定供應)
+  function dispatchNightTranslocation(amount = 1, fromAutoLoop = false) {
+    dispatchPhloemTranslocation({
+      target: state.fate,
+      amount,
+      isDaytime: false,
+      fromAutoLoop,
+      decreaseStarch: true
+    });
   }
 
   // 根部儲存養分再動員：將澱粉水解為蔗糖，沿韌皮部向上轉運至花、果或頂芽
@@ -1056,37 +1170,71 @@
     if (!fromStep) {
       clearAllTimers();
       state.loopNextTimerId = null;
-      state.isPlaying = false;
+      if (state.runMode !== 'parallel') {
+        state.isPlaying = false;
+      }
     }
     state.isDay = isDay;
     state.stomaOpen = isDay; // 照光氣孔開放；黑暗中氣孔自動閉合
     updateLightButtons();
 
     if (isDay) {
-      // 關鍵要求：蔗糖必須在日照開始之前完全送進庫！
+      // 若有夜間在途蔗糖，平滑結算入庫
       if (activeBatches.size > 0 || state.transports.length > 0) {
         settleAllInflightTransports();
       }
 
-      if (!fromStep) {
+      if (state.runMode === 'parallel') {
+        highlightAllDaytimeEquations();
+        state.stomaOpen = true;
+        state.stomaAperture = 1.0;
+        updateLoopStatusUI('【真實生理並行中】日間光照：氣孔進碳、光解產氧、木質部蒸散流、即時蔗糖外運與澱粉蓄洪同時進行');
+      } else if (!fromStep) {
         if (state.isAutoMode) {
           scheduleTimer(() => {
             executeStep(1, true);
           }, 350);
         } else {
           state.currentStep = 1;
-          updateLoopStatusUI('日間照光中（氣孔張開，可點擊【單步演示 (下一步)】推進合成）');
+          updateLoopStatusUI('日間照光中（氣孔張開，光合作用進行；部分蔗糖即時外運，多餘碳蓄存為暫時性澱粉）');
         }
       }
     } else {
+      // 進入夜晚：立刻關閉氣孔並全面停止蒸散作用！
+      state.stomaOpen = false;
+      state.stomaAperture = 0; // 氣孔立即閉合
+      state.vaporParticles = []; // 立即清空蒸散水氣
+      state.h2oParticles = []; // 立即清空木質部水分子流
+      if (state.isTranspirationMode) {
+        setTranspirationMode(false);
+      }
 
-      if (!fromStep) {
+      if (state.runMode === 'parallel') {
+        resetEquationHighlights();
+        // 清理日間浮游粒子
+        state.co2Particles = [];
+        state.o2Bubbles = [];
+        state.glucoseParticles = [];
+        state.dehydrationParticles = [];
+        // 水解葉片中的暫存澱粉並派送往目標庫器官
+        if (state.leafStarchCount > 0) {
+          updateLoopStatusUI(`【夜間接續轉運中】氣孔閉合、蒸散停止。葉綠體水解 ${state.leafStarchCount} 顆暫存澱粉為蔗糖，經由韌皮部持續運往庫器官...`);
+          dispatchNightTranslocation(state.leafStarchCount, true);
+        } else {
+          updateLoopStatusUI('【夜間黑暗】氣孔閉合、蒸散停止。目前葉綠體無暫存澱粉，即將迎接清晨日照...');
+          scheduleTimer(() => {
+            if (state.runMode === 'parallel') {
+              setDayNightMode(true, true);
+            }
+          }, 2000);
+        }
+      } else if (!fromStep) {
         if (state.isAutoMode) {
           scheduleTimer(() => {
             executeStep(7, true);
           }, 350);
         } else {
-          // 手動模式切換至黑暗模式：氣孔閉合，並將目前葉綠體所有暫存澱粉全數水解轉移送出！
+          // 手動模式切換至黑暗模式：氣孔閉合，並將目前葉綠體暫存澱粉全數水解接續送出！
           state.currentStep = 7;
           executeStep(7, false);
           if (state.leafStarchCount > 0) {
@@ -1094,12 +1242,12 @@
               executeStep(8, false);
             }, 1200);
           } else {
-            updateLoopStatusUI('【夜間黑暗】氣孔已閉合。目前葉綠體無暫存澱粉，可切換回【日間光照】進行合成！');
+            updateLoopStatusUI('【夜間黑暗】氣孔閉合、蒸散停止。目前葉綠體無暫存澱粉，可切換回【日間光照】進行合成！');
           }
         }
       }
     }
-    if (!fromStep) {
+    if (!fromStep && state.runMode !== 'parallel') {
       updateLoopStatusUI();
     }
   }
@@ -1211,8 +1359,8 @@
       state.shootGrowthPulse = Math.max(0, state.shootGrowthPulse - 0.015);
     }
 
-    // 蒸散作用模式下持續由根部生成水分子流 (約 92% 蒸散，約 8% 進入葉肉供光合作用)
-    if (state.isTranspirationMode) {
+    // 蒸散作用模式下持續由根部生成水分子流 (僅在日間照光時進行；約 92% 蒸散，約 8% 進入葉肉供光合作用)
+    if (state.isTranspirationMode && state.isDay) {
       if (now - state.lastTranspirationSpawn > 180) {
         state.lastTranspirationSpawn = now;
         const rootStartX = 500 + Math.random() * 160;
@@ -1250,6 +1398,115 @@
             speed: 0.026 + Math.random() * 0.008,
             size: 8
           });
+        }
+      }
+    }
+
+    // 真實生理全反應並行模式 (日間光照時，所有步驟動畫同時進行)
+    if (state.isParallelMode && !state.isTranspirationMode) {
+      if (state.isDay) {
+        // 1. CO2 經氣孔擴散進入 (起點與終點移動路徑與分步驟 Step 2 完全一致：自大氣擴散至氣孔)
+        if (now - state.lastParallelCO2Spawn > 480) {
+          state.lastParallelCO2Spawn = now;
+          state.co2Particles.push({
+            x: 270 + Math.random() * 220,
+            y: 65 + Math.random() * 120,
+            targetX: geo.stomaX + (Math.random() - 0.5) * 15,
+            targetY: geo.stomaY + (Math.random() - 0.5) * 10,
+            progress: 0,
+            speed: 0.016 + Math.random() * 0.008,
+            size: 8
+          });
+        }
+
+        // 2. 根部吸收水分經由木質部上升流 (約 88% 蒸散產生拉力，約 12% 供葉肉光反應)
+        if (now - state.lastParallelH2OSpawn > 280) {
+          state.lastParallelH2OSpawn = now;
+          const rootStartX = 510 + Math.random() * 140;
+          const rootStartY = geo.soilY + 50 + Math.random() * 110;
+          const isMesophyll = Math.random() < 0.12;
+
+          if (isMesophyll) {
+            state.h2oParticles.push({
+              targetKind: 'mesophyll',
+              waypoints: [
+                { x: rootStartX, y: rootStartY },
+                { x: geo.xylemStemX, y: geo.soilY + 20 },
+                { x: geo.xylemStemX, y: geo.leafCenterY },
+                { x: geo.leafBaseX, y: geo.leafCenterY - 4 },
+                { x: geo.chloroplastX, y: geo.chloroplastY }
+              ],
+              segment: 0,
+              segProgress: 0,
+              speed: 0.024 + Math.random() * 0.008,
+              size: 8
+            });
+          } else {
+            state.h2oParticles.push({
+              targetKind: 'transpiration',
+              waypoints: [
+                { x: rootStartX, y: rootStartY },
+                { x: geo.xylemStemX, y: geo.soilY + 20 },
+                { x: geo.xylemStemX, y: geo.leafCenterY },
+                { x: geo.leafBaseX, y: geo.leafCenterY - 4 },
+                { x: geo.stomaX + 16, y: geo.stomaY - 14 },
+                { x: geo.stomaX, y: geo.stomaY }
+              ],
+              segment: 0,
+              segProgress: 0,
+              speed: 0.024 + Math.random() * 0.008,
+              size: 8
+            });
+          }
+        }
+
+        // 3. 水光解產生氧氣釋放逸散 (起點與終點移動路徑與分步驟 Step 4 完全一致：自氣孔向外逸散至大氣)
+        if (now - state.lastParallelO2Spawn > 550) {
+          state.lastParallelO2Spawn = now;
+          state.o2Bubbles.push({
+            x: geo.stomaX + (Math.random() - 0.5) * 15,
+            y: geo.stomaY + (Math.random() - 0.5) * 10,
+            vx: -(1.2 + Math.random() * 1.5),
+            vy: -(1.6 + Math.random() * 1.8),
+            alpha: 1,
+            size: 9 + Math.random() * 4
+          });
+        }
+
+        // 4. 碳反應固定碳在細胞質即時合成蔗糖，經由韌皮部裝載即時外運 (約每 2200ms 一批)
+        if (now - state.lastParallelPhloemSpawn > 2200) {
+          state.lastParallelPhloemSpawn = now;
+          dispatchDaytimeTranslocation(1, true);
+        }
+
+        // 5. 超過外運負荷的多餘碳，在葉綠體脫水縮合為暫時性澱粉蓄洪 (每隔約 4.5 秒蓄存一顆，目標 3 顆)
+        if (now - state.lastParallelStarchSpawn > 4500) {
+          state.lastParallelStarchSpawn = now;
+          if (state.leafStarchCount < state.autoLoopTargetStarch) {
+            state.leafStarchCount++;
+            state.synthesisFlash = 0.8;
+            state.chloroplastPulse = 0.8;
+            // 脫水縮合釋放水滴
+            for (let d = 0; d < 3; d++) {
+              state.dehydrationParticles.push({
+                x: geo.chloroplastX + (Math.random() - 0.5) * 15,
+                y: geo.chloroplastY + (Math.random() - 0.5) * 15,
+                vx: (Math.random() - 0.5) * 1.5,
+                vy: -(0.8 + Math.random() * 1.2),
+                alpha: 1.0,
+                size: 5 + Math.random() * 3
+              });
+            }
+
+            if (state.leafStarchCount >= state.autoLoopTargetStarch) {
+              updateLoopStatusUI(`【真實生理並行中】日間暫存澱粉已蓄積達 ${state.leafStarchCount} 顆！即將進入夜間黑暗接續轉運...`);
+              scheduleTimer(() => {
+                if (state.runMode === 'parallel' && state.isDay) {
+                  setDayNightMode(false, true);
+                }
+              }, 2500);
+            }
+          }
         }
       }
     }
@@ -1532,7 +1789,7 @@
     // ----------------------------------------------------
     if (state.showSubtitles) {
       drawVascularLabel('【木質部】', '水分上行 ↑', 545, topY + 16, xPipeX, topY + 32, '#38bdf8', '#7dd3fc');
-      drawVascularLabel('【韌皮部】', '蔗糖輸導 ↕', 835, topY + 22, pPipeX, topY + 36, '#c084fc', '#e9d5ff');
+      drawVascularLabel('【韌皮部】', '蔗糖輸導 ↕ (晝夜24h)', 835, topY + 22, pPipeX, topY + 36, '#c084fc', '#e9d5ff');
 
       if (state.isTranspirationMode) {
         drawBigLabel('【蒸散拉力】水分由根部逆重力上升', geo.xylemStemX - 180, geo.soilY - 50, '#38bdf8', 14);
@@ -2393,6 +2650,26 @@
       targetName = '氣孔與木質部';
       organX = geo.stomaX;
       organY = geo.stomaY;
+    } else if (state.isParallelMode) {
+      if (state.isDay) {
+        curStepNum = 'parallel_day';
+        title = `日間全反應並行：氣孔進碳、光解產氧、蒸散流、即時蔗糖外運與澱粉蓄洪 (${state.leafStarchCount}/${state.autoLoopTargetStarch})`;
+        targetName = '葉綠體與全株庫器官';
+        organX = geo.chloroplastX;
+        organY = geo.chloroplastY;
+      } else {
+        curStepNum = 'parallel_night';
+        title = `夜間黑暗：氣孔閉合，葉綠體水解 ${state.leafStarchCount} 顆暫存澱粉為蔗糖持續外運`;
+        const destName = {
+          root: '塊根 (儲藏)',
+          flower: '花朵 (花蜜)',
+          fruit: '果實 (膨大)',
+          shoot: '頂芽 (生長)'
+        }[state.fate] || '目標庫器官';
+        targetName = destName;
+        organX = state.fate === 'flower' ? geo.flowerX : (state.fate === 'fruit' ? geo.fruitBranchX : (state.fate === 'shoot' ? geo.shootX : geo.rootTuberX));
+        organY = state.fate === 'flower' ? geo.flowerY : (state.fate === 'fruit' ? geo.fruitBranchY : (state.fate === 'shoot' ? geo.shootY : geo.rootTuberY));
+      }
     } else {
       curStepNum = (state.currentStep >= 1 && state.currentStep <= 8) ? state.currentStep : (state.isDay ? 1 : 7);
       const info = STEP_INFOS[curStepNum - 1];
@@ -2402,24 +2679,24 @@
       organX = info.organX;
       organY = info.organY;
 
-      // 若在第8步夜間轉運，則根據目標器官動態調整聚焦光圈與文字
-      if (curStepNum === 8) {
+      // 若在第5步日間即時轉運 或 第8步夜間接續轉運，則根據目標器官動態調整聚焦光圈與文字
+      if (curStepNum === 5 || curStepNum === 8) {
         if (state.fate === 'flower') {
           organX = geo.flowerX;
           organY = geo.flowerY;
-          targetName = '花朵 (頂端庫器官)';
+          targetName = curStepNum === 5 ? '花朵 (日間即時供能)' : '花朵 (夜間接續供能)';
         } else if (state.fate === 'fruit') {
           organX = geo.fruitBranchX;
           organY = geo.fruitBranchY;
-          targetName = '果實 (側分支庫器官)';
+          targetName = curStepNum === 5 ? '果實 (日間即時轉化)' : '果實 (夜間接續積累)';
         } else if (state.fate === 'shoot') {
           organX = geo.shootX;
           organY = geo.shootY - Math.min(state.shootEnergyCount * 9, 45);
-          targetName = '頂芽 (頂端生長器官)';
+          targetName = curStepNum === 5 ? '頂芽 (日間即時生長)' : '頂芽 (夜間接續生長)';
         } else {
           organX = geo.rootTuberX;
           organY = geo.rootTuberY;
-          targetName = '塊根 (地下儲藏器官)';
+          targetName = curStepNum === 5 ? '塊根 (日間即時儲藏)' : '塊根 (夜間接續儲存)';
         }
       }
     }
@@ -2511,6 +2788,12 @@
     if (curStepNum === 0) {
       badgeGrad.addColorStop(0, '#0284c7');
       badgeGrad.addColorStop(1, '#38bdf8');
+    } else if (curStepNum === 'parallel_day') {
+      badgeGrad.addColorStop(0, '#0284c7');
+      badgeGrad.addColorStop(1, '#06b6d4');
+    } else if (curStepNum === 'parallel_night') {
+      badgeGrad.addColorStop(0, '#7c3aed');
+      badgeGrad.addColorStop(1, '#a855f7');
     } else if (state.isDay) {
       badgeGrad.addColorStop(0, '#059669');
       badgeGrad.addColorStop(1, '#10b981');
@@ -2523,11 +2806,20 @@
     drawRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 15);
     ctx.fill();
 
+    let badgeLabel = `步驟 ${curStepNum}/8`;
+    if (curStepNum === 0) {
+      badgeLabel = '蒸散作用';
+    } else if (curStepNum === 'parallel_day') {
+      badgeLabel = '真實生理';
+    } else if (curStepNum === 'parallel_night') {
+      badgeLabel = '夜間轉運';
+    }
+
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 12px "Noto Sans TC", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(curStepNum === 0 ? '蒸散作用' : `步驟 ${curStepNum}/8`, badgeX + badgeW / 2, badgeY + badgeH / 2);
+    ctx.fillText(badgeLabel, badgeX + badgeW / 2, badgeY + badgeH / 2);
 
     // 中間主要字幕文字 (Main Subtitle Text)
     ctx.textAlign = 'left';
@@ -2591,16 +2883,18 @@
         if (p.segment >= p.waypoints.length - 1 && !p.triggered) {
           p.triggered = true;
           if (p.targetKind === 'transpiration') {
-            // 水分子抵達氣孔，轉化為蒸散水氣逸散至大氣
-            for (let v = 0; v < 3; v++) {
-              state.vaporParticles.push({
-                x: geo.stomaX + (Math.random() - 0.5) * 12,
-                y: geo.stomaY + (Math.random() - 0.5) * 8,
-                vx: -(1.2 + Math.random() * 1.5),
-                vy: -(1.4 + Math.random() * 1.6),
-                alpha: 0.95,
-                size: 15 + Math.random() * 6
-              });
+            // 水分子抵達氣孔，轉化為蒸散水氣逸散至大氣 (夜間氣孔閉合時全面停止)
+            if (state.isDay && state.stomaAperture > 0.05) {
+              for (let v = 0; v < 3; v++) {
+                state.vaporParticles.push({
+                  x: geo.stomaX + (Math.random() - 0.5) * 12,
+                  y: geo.stomaY + (Math.random() - 0.5) * 8,
+                  vx: -(1.2 + Math.random() * 1.5),
+                  vy: -(1.4 + Math.random() * 1.6),
+                  alpha: 0.95,
+                  size: 15 + Math.random() * 6
+                });
+              }
             }
           } else if (p.targetKind === 'mesophyll') {
             // 少部分水分子進入葉肉細胞供光合作用
@@ -2631,31 +2925,35 @@
     });
     state.h2oParticles = state.h2oParticles.filter(p => p.segment < p.waypoints.length - 1);
 
-    // C. 蒸散水氣逸散粒子 (自氣孔散失之 H2O 氣體)
-    state.vaporParticles.forEach(vp => {
-      vp.x += vp.vx;
-      vp.y += vp.vy;
-      vp.alpha -= 0.012;
-      vp.size += 0.16;
+    // C. 蒸散水氣逸散粒子 (自氣孔散失之 H2O 氣體，夜間氣孔閉合時立刻完全停止並清空)
+    if (!state.isDay) {
+      state.vaporParticles = [];
+    } else {
+      state.vaporParticles.forEach(vp => {
+        vp.x += vp.vx;
+        vp.y += vp.vy;
+        vp.alpha -= 0.012;
+        vp.size += 0.16;
 
-      if (vp.alpha > 0) {
-        ctx.save();
-        ctx.globalAlpha = Math.max(0, vp.alpha);
-        ctx.fillStyle = 'rgba(56, 189, 248, 0.28)';
-        ctx.beginPath();
-        ctx.arc(vp.x, vp.y, vp.size, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(125, 211, 252, 0.55)';
-        ctx.lineWidth = 1.4;
-        ctx.stroke();
+        if (vp.alpha > 0) {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, vp.alpha);
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.28)';
+          ctx.beginPath();
+          ctx.arc(vp.x, vp.y, vp.size, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(125, 211, 252, 0.55)';
+          ctx.lineWidth = 1.4;
+          ctx.stroke();
 
-        ctx.fillStyle = '#f0f9ff';
-        ctx.font = 'bold 11px "JetBrains Mono", monospace';
-        ctx.fillText('H₂O 氣體', vp.x, vp.y + 1);
-        ctx.restore();
-      }
-    });
-    state.vaporParticles = state.vaporParticles.filter(vp => vp.alpha > 0);
+          ctx.fillStyle = '#f0f9ff';
+          ctx.font = 'bold 11px "JetBrains Mono", monospace';
+          ctx.fillText('H₂O 氣體', vp.x, vp.y + 1);
+          ctx.restore();
+        }
+      });
+      state.vaporParticles = state.vaporParticles.filter(vp => vp.alpha > 0);
+    }
 
     // D. 氧氣氣泡 O2 (大尺寸 40px 氣泡，大字體 bold 15px)
     state.o2Bubbles.forEach(b => {
@@ -2784,7 +3082,10 @@
   // 事件監聽與切換
   // =========================================================================
   function initEvents() {
-    // 運行模式切換 (自動循環 vs 手動單步)
+    // 運行模式切換 (真實生理 vs 自動分步 vs 手動單步)
+    if (modeParallelBtn) {
+      modeParallelBtn.onclick = () => setRunMode('parallel');
+    }
     if (modeAutoBtn) {
       modeAutoBtn.onclick = () => setRunMode('auto');
     }
@@ -2897,18 +3198,13 @@
   function init() {
     initEvents();
     setInsetMode('guardCell');
-    setDayNightMode(true, true);
-    updateModeButtons();
     updateLightButtons();
     updateSubtitleButtons();
     updateRemobilizeButtonStates();
     updateFateButtons();
-    updateLoopStatusUI();
 
-    // 進入頁面後立即自動重複執行光合作用過程
-    scheduleTimer(() => {
-      playPhotosynthesisDemo();
-    }, 450);
+    // 預設啟動「真實生理」模式 (日間光照下所有步驟動畫同時進行)
+    setRunMode('parallel');
 
     requestAnimationFrame(render);
   }

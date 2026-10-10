@@ -22,13 +22,13 @@
     <div class="equation-display">
       <span class="eq-item" id="eqCO2">6 CO₂</span>
       <span class="eq-op">+</span>
-      <span class="eq-item" id="eqH2O">6 H₂O</span>
+      <span class="eq-item" id="eqH2O">12 H₂O</span>
       <span class="eq-arrow" id="eqLightArrow">➔</span>
       <span class="eq-item" id="eqGlucose">C₆H₁₂O₆ (葡萄糖)</span>
       <span class="eq-op">+</span>
       <span class="eq-item" id="eqO2">6 O₂ ↑</span>
       <span class="eq-op">+</span>
-      <span class="eq-item" id="eqH2O">6 H₂O↑</span>
+      <span class="eq-item" id="eqH2Oproduct">6 H₂O↑</span>
       <span class="eq-arrow" id="eqPolyArrow">➔ 縮合聚合 ➔</span>
       <span class="eq-item" id="eqStarch">(C₆H₁₀O₅)ₙ (澱粉)</span>
     </div>
@@ -47,23 +47,26 @@
       <div class="panel-card">
         <div class="panel-header-row">
           <h2 class="card-heading">控制面板</h2>
-          <span id="loopIndicator" class="loop-badge active" title="晝夜光合與轉運循環狀態">
+          <span id="loopIndicator" class="loop-badge active parallel" title="晝夜光合與轉運循環狀態">
             <span class="loop-dot"></span>
-            <span id="loopBadgeText">自動循環中</span>
+            <span id="loopBadgeText">真實生理並行中</span>
           </span>
         </div>
 
 
         <!-- 集中控制組：1. 運行模式 Toggle  2. 光照環境 Toggle -->
         <div class="controls-cluster">
-          <!-- 組 1：運行模式切換 (自動循環 vs 手動單步) -->
+          <!-- 組 1：運行模式切換 (真實生理 vs 自動分步 vs 手動單步) -->
           <div class="control-toggle-block">
             <span class="control-block-title">運行模式</span>
             <div class="segmented-pair">
-              <button id="modeAutoBtn" class="seg-btn active" title="自動模式：自動切換日夜並依序進行所有生理步驟">
-                自動循環
+              <button id="modeParallelBtn" class="seg-btn active" title="真實生理模式：日照時氣孔張開、吸水蒸散、水光解產氧、固碳合成、蔗糖外運與澱粉蓄存所有步驟同時並行！">
+                真實生理
               </button>
-              <button id="modeManualBtn" class="seg-btn" title="手動模式：由使用者點擊下一步推進步驟，自由觀察">
+              <button id="modeAutoBtn" class="seg-btn" title="自動分步模式：依序由步驟 1 到步驟 8 逐步自動推進演示">
+                自動分步
+              </button>
+              <button id="modeManualBtn" class="seg-btn" title="手動單步模式：由使用者點擊下一步推進步驟，自由觀察">
                 手動單步
               </button>
             </div>
@@ -73,10 +76,10 @@
           <div class="control-toggle-block">
             <span class="control-block-title">晝夜光照環境</span>
             <div class="segmented-pair">
-              <button id="lightDayBtn" class="seg-btn light-day active" title="日間光照：氣孔張開，光合作用持續合成並累積澱粉（至飽和）">
+              <button id="lightDayBtn" class="seg-btn light-day active" title="日間光照：氣孔張開，光合作用進行；部分蔗糖即時裝載外運，過量碳蓄存為暫時性澱粉">
                 日間光照
               </button>
-              <button id="lightNightBtn" class="seg-btn light-night" title="夜間黑暗：氣孔閉合，將葉綠體中所有暫存澱粉全數水解轉運出葉片">
+              <button id="lightNightBtn" class="seg-btn light-night" title="夜間黑暗：氣孔閉合，光合停止；葉綠體暫存澱粉水解為蔗糖接續轉運，確保庫器官晝夜穩定供能">
                 夜間黑暗
               </button>
             </div>
@@ -135,36 +138,36 @@
       </div>
 
 
-      <!-- 區塊 2：夜間養分輸導去向 (長途運送皆為蔗糖，到器官才轉化) -->
+      <!-- 區塊 2：韌皮部養分輸導去向 (24 小時晝夜持續運輸) -->
       <div class="panel-card">
-        <h2 class="card-heading">夜間養分輸導去向 (韌皮部)</h2>
-        <p class="panel-hint">夜間葉綠體澱粉水解為【蔗糖】，沿韌皮部運送至：</p>
+        <h2 class="card-heading">韌皮部養分輸導去向 (晝夜 24h 持續)</h2>
+        <p class="panel-hint">長途運輸皆為【蔗糖】；白天即時裝載外運，夜間水解暫存澱粉接續運送至：</p>
         <div class="fate-vertical-group">
-          <button id="fateRootBtn" class="fate-btn-lg active" data-fate="root" title="夜間以蔗糖沿韌皮部運送至根部，轉化為澱粉儲藏">
+          <button id="fateRootBtn" class="fate-btn-lg active" data-fate="root" title="以蔗糖沿韌皮部運送至根部，轉化為澱粉儲藏 (白天即時＋夜間接續)">
             <div class="fate-info">
               <strong>運往根部 ➔ 轉化為澱粉</strong>
-              <small>夜間以蔗糖運送，根部縮合為澱粉</small>
+              <small>白天即時＋夜間接續以蔗糖運送</small>
             </div>
           </button>
 
-          <button id="fateFlowerBtn" class="fate-btn-lg" data-fate="flower" title="夜間以蔗糖沿韌皮部運送至花朵，轉化為開花能量與花蜜">
+          <button id="fateFlowerBtn" class="fate-btn-lg" data-fate="flower" title="以蔗糖沿韌皮部運送至花朵，轉化為開花能量與花蜜 (白天即時＋夜間接續)">
             <div class="fate-info">
               <strong>運往花朵 ➔ 轉化為花蜜</strong>
-              <small>夜間以蔗糖運送，提供能量與花蜜</small>
+              <small>白天即時＋夜間接續以蔗糖運送</small>
             </div>
           </button>
 
-          <button id="fateFruitBtn" class="fate-btn-lg" data-fate="fruit" title="夜間以蔗糖沿韌皮部運送至果實，轉化為果糖並膨大">
+          <button id="fateFruitBtn" class="fate-btn-lg" data-fate="fruit" title="以蔗糖沿韌皮部運送至果實，轉化為果糖並膨大 (白天即時＋夜間接續)">
             <div class="fate-info">
               <strong>運往果實 ➔ 轉化為果糖</strong>
-              <small>夜間以蔗糖運送，積累果糖與膨大</small>
+              <small>白天即時＋夜間接續以蔗糖運送</small>
             </div>
           </button>
 
-          <button id="fateShootBtn" class="fate-btn-lg" data-fate="shoot" title="夜間以蔗糖沿韌皮部運送至頂端新葉芽，轉化為生長能量">
+          <button id="fateShootBtn" class="fate-btn-lg" data-fate="shoot" title="以蔗糖沿韌皮部運送至頂端新葉芽，支持細胞分裂生長 (白天即時＋夜間接續)">
             <div class="fate-info">
               <strong>運往頂芽 ➔ 提供生長能量</strong>
-              <small>夜間以蔗糖運送，支持頂端生長</small>
+              <small>白天即時＋夜間接續以蔗糖運送</small>
             </div>
           </button>
         </div>
