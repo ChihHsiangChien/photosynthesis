@@ -465,7 +465,7 @@
         resetEquationHighlights();
         eqCO2.classList.add('active-co2');
 
-        for (let i = 0; i < 18; i++) {
+        for (let i = 0; i < 12; i++) {
           scheduleTimer(() => {
             state.co2Particles.push({
               x: 270 + Math.random() * 220,
@@ -496,7 +496,7 @@
         if (!state.isDay) setDayNightMode(true, true);
         eqH2O.classList.add('active-h2o');
 
-        for (let i = 0; i < 22; i++) {
+        for (let i = 0; i < 10; i++) {
           scheduleTimer(() => {
             const rootStartX = 500 + Math.random() * 160;
             const rootStartY = geo.soilY + 50 + Math.random() * 120;
@@ -509,7 +509,7 @@
               ],
               segment: 0,
               segProgress: 0,
-              speed: 0.026 + Math.random() * 0.008,
+              speed: 0.026 + Math.random() * 0.038,
               size: 8
             });
           }, i * 55);
@@ -534,7 +534,7 @@
         eqO2.classList.add('active-o2');
         state.chloroplastPulse = 1.0;
 
-        for (let i = 0; i < 18; i++) {
+        for (let i = 0; i < 12; i++) {
           scheduleTimer(() => {
             state.o2Bubbles.push({
               x: geo.stomaX + (Math.random() - 0.5) * 15,
@@ -789,17 +789,17 @@
     let color = '#fef08a';
 
     if (kind === 'flower' || kind === 'root_to_flower') {
-      text = `蔗糖 ➔ 花蜜與開花能量${qtyStr} 🌸`;
+      text = `蔗糖 ➔ 花蜜與開花能量${qtyStr}`;
       x = geo.flowerX;
       y = geo.flowerY - 22;
       color = '#f472b6';
     } else if (kind === 'fruit' || kind === 'root_to_fruit') {
-      text = `蔗糖 ➔ 果糖積累與膨大${qtyStr} 🍎`;
+      text = `蔗糖 ➔ 果糖積累與膨大${qtyStr}`;
       x = geo.fruitBranchX;
       y = geo.fruitBranchY - 22;
       color = '#f87171';
     } else if (kind === 'shoot' || kind === 'root_to_shoot') {
-      text = `蔗糖 ➔ 纖維素與頂芽生長${qtyStr} 🌱`;
+      text = `蔗糖 ➔ 纖維素與頂芽生長${qtyStr}`;
       x = geo.shootX;
       const shootOffset = Math.min(state.shootEnergyCount * 9, 45);
       y = geo.shootY - shootOffset - 22;
@@ -942,7 +942,7 @@
     }
 
     const batchId = ++batchCounter;
-    const particleCount = Math.min(22, 10 + amount * 2);
+    const particleCount = 3;
 
     // 隨時間逐漸減少葉綠體內的澱粉數
     for (let k = 0; k < amount; k++) {
@@ -968,7 +968,7 @@
           waypoints: targetWaypoints,
           segment: 0,
           segProgress: 0,
-          speed: 0.035 + Math.random() * 0.005,
+          speed: 0.025 + Math.random() * 0.025,
           reached: false
         });
       }, i * 50);
@@ -996,7 +996,7 @@
     }
 
     const batchId = ++batchCounter;
-    const particleCount = 14;
+    const particleCount = 3;
     let waypoints = [];
 
     if (target === 'flower') {
@@ -1326,7 +1326,6 @@
       ctx.arc(geo.sunX, geo.sunY, 38, 0, Math.PI * 2);
       ctx.fill();
 
-      drawBigLabel('太陽輻射光能', geo.sunX - 45, geo.sunY + 62, '#fef08a', 18);
     } else {
       // 黑暗環境：夜空無光
       ctx.fillStyle = '#e2e8f0';
@@ -1339,7 +1338,7 @@
       ctx.arc(geo.sunX + 10, geo.sunY - 5, 24, 0, Math.PI * 2);
       ctx.fill();
 
-      drawBigLabel('黑暗環境 (無光照)', geo.sunX - 65, geo.sunY + 62, '#94a3b8', 18);
+      drawBigLabel('黑暗環境', geo.sunX - 65, geo.sunY + 62, '#94a3b8', 18);
     }
 
     // 土壤
@@ -1358,7 +1357,7 @@
     ctx.lineTo(geo.w, geo.soilY);
     ctx.stroke();
 
-    drawBigLabel('地表土壤層 (根部吸收水分)', 40, geo.soilY + 36, '#e2e8f0', 18);
+    drawBigLabel('土壤層', 40, geo.soilY + 36, '#e2e8f0', 18);
     
   }
 
