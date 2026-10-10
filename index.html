@@ -18,22 +18,22 @@
   <!-- 頂部大字標題與化學式看板 -->
   <header class="main-header">
     <div class="brand">
-      <span class="brand-icon">🌱</span>
       <div class="brand-title">
         <h1>光合作用與養分輸導展示</h1>
-        <span class="brand-sub">Photosynthesis & Source-Sink Nutrient Allocation</span>
       </div>
     </div>
 
-    <!-- 大字體化學方程式看板 -->
+    <!-- 大字體化學方程式看板：涵蓋光合作用產生葡萄糖與縮合聚合暫時性澱粉完整歷程 -->
     <div class="equation-display">
       <span class="eq-item" id="eqCO2">6 CO₂</span>
       <span class="eq-op">+</span>
       <span class="eq-item" id="eqH2O">6 H₂O</span>
-      <span class="eq-arrow">➔ 光能 ➔</span>
+      <span class="eq-arrow" id="eqLightArrow">➔ 光能 ➔</span>
       <span class="eq-item" id="eqGlucose">C₆H₁₂O₆ (葡萄糖)</span>
       <span class="eq-op">+</span>
       <span class="eq-item" id="eqO2">6 O₂ ↑</span>
+      <span class="eq-arrow" id="eqPolyArrow">➔ 縮合聚合 ➔</span>
+      <span class="eq-item" id="eqStarch">(C₆H₁₀O₅)ₙ (暫時性澱粉)</span>
     </div>
   </header>
 
@@ -46,65 +46,128 @@
 
     <!-- 右側集中所有按鈕操作面板 (所有 UI 集中於此) -->
     <aside class="sidebar-panel">
-      <!-- 區塊 1：核心演示控制 -->
+      <!-- 區塊 1：核心演示控制 (集中模式與光照雙組 Toggle) -->
       <div class="panel-card">
         <div class="panel-header-row">
-          <h2 class="card-heading">演示控制</h2>
-          <span id="loopIndicator" class="loop-badge active" title="光合作用過程自動循環狀態">
+          <h2 class="card-heading">控制面板</h2>
+          <span id="loopIndicator" class="loop-badge active" title="晝夜光合與轉運循環狀態">
             <span class="loop-dot"></span>
-            <span id="loopBadgeText">自動重複中</span>
+            <span id="loopBadgeText">自動循環中</span>
           </span>
         </div>
-        <div id="loopStatusDetail" class="loop-status-detail">
-          <span class="loop-icon">🔄</span>
-          <span id="loopStatusText">光合作用自動循環：第 <strong>1</strong> 輪運行中</span>
+
+
+        <!-- 集中控制組：1. 運行模式 Toggle  2. 光照環境 Toggle -->
+        <div class="controls-cluster">
+          <!-- 組 1：運行模式切換 (自動循環 vs 手動單步) -->
+          <div class="control-toggle-block">
+            <span class="control-block-title">運行模式</span>
+            <div class="segmented-pair">
+              <button id="modeAutoBtn" class="seg-btn active" title="自動模式：自動切換日夜並依序進行所有生理步驟">
+                自動循環
+              </button>
+              <button id="modeManualBtn" class="seg-btn" title="手動模式：由使用者點擊下一步推進步驟，自由觀察">
+                手動單步
+              </button>
+            </div>
+          </div>
+
+          <!-- 組 2：光照環境切換 (日間光照 vs 夜間黑暗) -->
+          <div class="control-toggle-block">
+            <span class="control-block-title">晝夜光照環境</span>
+            <div class="segmented-pair">
+              <button id="lightDayBtn" class="seg-btn light-day active" title="日間光照：氣孔張開，光合作用持續合成並累積澱粉（至飽和）">
+                日間光照
+              </button>
+              <button id="lightNightBtn" class="seg-btn light-night" title="夜間黑暗：氣孔閉合，將葉綠體中所有暫存澱粉全數水解轉運出葉片">
+                夜間黑暗
+              </button>
+            </div>
+          </div>
+
+          <!-- 組 3：解說字幕與標籤文字 (控制底部步驟字幕、木質部/韌皮部/根毛吸水區) -->
+          <div class="control-toggle-block">
+            <span class="control-block-title">畫布解說字幕與標籤</span>
+            <div class="segmented-pair">
+              <button id="subtitleOnBtn" class="seg-btn subtitle-on active" title="在畫布上顯示即時步驟解說字幕、木質部/韌皮部與根毛吸水區等標籤文字">
+                顯示字幕
+              </button>
+              <button id="subtitleOffBtn" class="seg-btn subtitle-off" title="隱藏畫布上的即時步驟解說字幕、木質部/韌皮部與根毛吸水區等標籤文字">
+                隱藏字幕
+              </button>
+            </div>
+          </div>
+
+          <!-- 組 4：微觀放大圖 -->
+          <div class="control-toggle-block">
+            <span class="control-block-title">微觀放大圖</span>
+            <div class="segmented-pair">
+              <button id="insetOnBtn" class="seg-btn inset-on" title="在畫布上顯示微觀放大圖">
+                開啟放大圖
+              </button>
+              <button id="insetOffBtn" class="seg-btn inset-off active" title="隱藏畫布上的微觀放大圖">
+                關閉放大圖
+              </button>
+            </div>
+          </div>
         </div>
-        <div class="btn-vertical-group">
-          <button id="playBtn" class="primary-btn-lg playing" title="點擊暫停或恢復自動重複執行">
-            <span class="btn-icon">⏸️</span> 暫停自動重複
+
+        <div class="btn-vertical-group" style="margin-top: 10px;">
+          <button id="stepBtn" class="step-btn-lg" title="手動模式下點擊逐步演示各個生理階段">
+            單步演示 (下一步)
+          </button>
+          <button id="transpirationBtn" class="transpiration-btn-lg" title="單獨演示水分運輸：根部吸水、木質部蒸散拉力與氣孔蒸散作用">
+            蒸散作用展示
           </button>
           <button id="resetBtn" class="secondary-btn-lg" title="重置畫面與計數">
             <span>重置畫面</span>
           </button>
         </div>
+
+        <!-- 蒸散作用專題資訊面板 (單獨展示水分運輸時顯示) -->
+        <div id="transpirationInfoBox" class="transpiration-info-box" style="display: none;">
+          <div class="trans-info-title">蒸散流機制 (Transpiration Stream)</div>
+          <div class="trans-info-desc">
+            氣孔張開時，水分自氣孔蒸發產生<strong>蒸散拉力 (Transpiration Pull)</strong>，牽引水分由根部經木質部逆重力上升。
+          </div>
+          <div class="trans-stat-row">
+            <span class="stat-badge stat-transpire">氣孔蒸散逸散：約 99%</span>
+            <span class="stat-badge stat-photo">葉肉細胞利用：約 1%</span>
+          </div>
+        </div>
       </div>
 
-      <!-- 區塊 2：光照環境與氣孔狀態 (照光開啟 / 黑暗關閉) -->
-      <div class="panel-card">
-        <h2 class="card-heading">光照環境與氣孔</h2>
-        <p class="panel-hint">照光時氣孔張開；黑暗時氣孔自動閉合：</p>
-        <button id="toggleLightBtn" class="light-toggle-btn day" title="點擊切換照光(氣孔開)或黑暗(氣孔關)">
-          <span id="lightIcon">☀️</span>
-          <span id="lightStatusText">日間照光（氣孔開啟）</span>
-        </button>
-      </div>
 
-      <!-- 區塊 3：養分輸導與去向 (長途運送皆為蔗糖，到器官才轉化) -->
+      <!-- 區塊 2：夜間養分輸導去向 (長途運送皆為蔗糖，到器官才轉化) -->
       <div class="panel-card">
-        <h2 class="card-heading">養分輸導與去向</h2>
-        <p class="panel-hint">轉化為【蔗糖】經韌皮部運送，抵達器官後轉化：</p>
+        <h2 class="card-heading">夜間養分輸導去向 (韌皮部)</h2>
+        <p class="panel-hint">夜間葉綠體澱粉水解為【蔗糖】，沿韌皮部運送至：</p>
         <div class="fate-vertical-group">
-          <button id="fateRootBtn" class="fate-btn-lg active" data-fate="root" title="以蔗糖沿韌皮部運送至根部，轉化為澱粉儲藏">
-            <span class="fate-icon">🥔</span>
+          <button id="fateRootBtn" class="fate-btn-lg active" data-fate="root" title="夜間以蔗糖沿韌皮部運送至根部，轉化為澱粉儲藏">
             <div class="fate-info">
               <strong>運往根部 ➔ 轉化為澱粉</strong>
-              <small>以蔗糖運送，根部縮合為澱粉</small>
+              <small>夜間以蔗糖運送，根部縮合為澱粉</small>
             </div>
           </button>
 
-          <button id="fateFlowerBtn" class="fate-btn-lg" data-fate="flower" title="以蔗糖沿韌皮部運送至花朵，轉化為開花能量與花蜜">
-            <span class="fate-icon">🌸</span>
+          <button id="fateFlowerBtn" class="fate-btn-lg" data-fate="flower" title="夜間以蔗糖沿韌皮部運送至花朵，轉化為開花能量與花蜜">
             <div class="fate-info">
               <strong>運往花朵 ➔ 轉化為花蜜</strong>
-              <small>以蔗糖運送，提供能量與花蜜</small>
+              <small>夜間以蔗糖運送，提供能量與花蜜</small>
             </div>
           </button>
 
-          <button id="fateFruitBtn" class="fate-btn-lg" data-fate="fruit" title="以蔗糖沿韌皮部運送至果實，轉化為果糖並膨大">
-            <span class="fate-icon">🍎</span>
+          <button id="fateFruitBtn" class="fate-btn-lg" data-fate="fruit" title="夜間以蔗糖沿韌皮部運送至果實，轉化為果糖並膨大">
             <div class="fate-info">
               <strong>運往果實 ➔ 轉化為果糖</strong>
-              <small>以蔗糖運送，積累果糖與膨大</small>
+              <small>夜間以蔗糖運送，積累果糖與膨大</small>
+            </div>
+          </button>
+
+          <button id="fateShootBtn" class="fate-btn-lg" data-fate="shoot" title="夜間以蔗糖沿韌皮部運送至頂端新葉芽，轉化為生長能量">
+            <div class="fate-info">
+              <strong>運往頂芽 ➔ 提供生長能量</strong>
+              <small>夜間以蔗糖運送，支持頂端生長</small>
             </div>
           </button>
         </div>
@@ -112,11 +175,10 @@
 
       <!-- 區塊 4：根部儲存養分再動員 (轉運至花或果實) -->
       <div class="panel-card remobilize-card">
-        <h2 class="card-heading">🔄 根部養分轉運 (再動員)</h2>
+        <h2 class="card-heading">根部養分轉運 (再動員)</h2>
         <p class="panel-hint">澱粉水解為【蔗糖】，沿韌皮部向上運送至器官：</p>
         <div class="btn-vertical-group">
           <button id="rootToFlowerBtn" class="remobilize-btn flower-remobilize" title="根部澱粉水解為蔗糖，沿韌皮部向上輸送至花朵轉化為花蜜">
-            <span class="btn-icon">🌸</span>
             <div class="fate-info">
               <strong>根部澱粉 ➔ 水解蔗糖運往花朵</strong>
               <small>水解為蔗糖上行，轉化為花蜜</small>
@@ -124,10 +186,16 @@
           </button>
 
           <button id="rootToFruitBtn" class="remobilize-btn fruit-remobilize" title="根部澱粉水解為蔗糖，沿韌皮部向上輸送至果實轉化為果糖">
-            <span class="btn-icon">🍎</span>
             <div class="fate-info">
               <strong>根部澱粉 ➔ 水解蔗糖運往果實</strong>
               <small>水解為蔗糖上行，轉化為果糖</small>
+            </div>
+          </button>
+
+          <button id="rootToShootBtn" class="remobilize-btn shoot-remobilize" title="根部澱粉水解為蔗糖，沿韌皮部向上輸送至頂芽支持生長">
+            <div class="fate-info">
+              <strong>根部澱粉 ➔ 水解蔗糖運往頂芽</strong>
+              <small>水解為蔗糖上行，支持頂端生長</small>
             </div>
           </button>
         </div>
