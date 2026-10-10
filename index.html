@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>光合作用</title>
   <meta name="description" content="光合作用與養分分配動態展示：氣孔與保衛細胞、水木質部上升、葡萄糖合成後分流運送至根部儲存、花朵發育或果實積累。">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -49,7 +49,7 @@
           <h2 class="card-heading">控制面板</h2>
           <span id="loopIndicator" class="loop-badge active parallel" title="晝夜光合與轉運循環狀態">
             <span class="loop-dot"></span>
-            <span id="loopBadgeText">真實生理並行中</span>
+            <span id="loopBadgeText">同步進行中</span>
           </span>
         </div>
 
@@ -60,8 +60,8 @@
           <div class="control-toggle-block">
             <span class="control-block-title">運行模式</span>
             <div class="segmented-pair">
-              <button id="modeParallelBtn" class="seg-btn active" title="真實生理模式：日照時氣孔張開、吸水蒸散、水光解產氧、固碳合成、蔗糖外運與澱粉蓄存所有步驟同時並行！">
-                真實生理
+              <button id="modeParallelBtn" class="seg-btn active" title="同步模式：日照時氣孔張開、吸水蒸散、水光解產氧、固碳合成、蔗糖外運與澱粉蓄存所有步驟同時進行！">
+                同步
               </button>
               <button id="modeAutoBtn" class="seg-btn" title="自動分步模式：依序由步驟 1 到步驟 8 逐步自動推進演示">
                 自動分步
@@ -89,10 +89,10 @@
           <div class="control-toggle-block">
             <span class="control-block-title">畫布解說字幕與標籤</span>
             <div class="segmented-pair">
-              <button id="subtitleOnBtn" class="seg-btn subtitle-on active" title="在畫布上顯示即時步驟解說字幕、木質部/韌皮部與根毛吸水區等標籤文字">
+              <button id="subtitleOnBtn" class="seg-btn subtitle-on" title="在畫布上顯示即時步驟解說字幕、木質部/韌皮部與根毛吸水區等標籤文字">
                 顯示字幕
               </button>
-              <button id="subtitleOffBtn" class="seg-btn subtitle-off" title="隱藏畫布上的即時步驟解說字幕、木質部/韌皮部與根毛吸水區等標籤文字">
+              <button id="subtitleOffBtn" class="seg-btn subtitle-off active" title="隱藏畫布上的即時步驟解說字幕、木質部/韌皮部與根毛吸水區等標籤文字">
                 隱藏字幕
               </button>
             </div>
@@ -145,8 +145,15 @@
         <div class="fate-vertical-group">
           <button id="fateRootBtn" class="fate-btn-lg active" data-fate="root" title="以蔗糖沿韌皮部運送至根部，轉化為澱粉儲藏 (白天即時＋夜間接續)">
             <div class="fate-info">
-              <strong>運往根部 ➔ 轉化為澱粉</strong>
+              <strong>運往塊根 ➔ 轉化為澱粉</strong>
               <small>白天即時＋夜間接續以蔗糖運送</small>
+            </div>
+          </button>
+
+          <button id="fateRootGrowthBtn" class="fate-btn-lg" data-fate="root_growth" title="以蔗糖沿韌皮部運送至根系，支持根系細胞分裂、伸長與生長 (白天即時＋夜間接續)">
+            <div class="fate-info">
+              <strong>送到根系</strong>
+              <small>支持根系細胞分裂與生長</small>
             </div>
           </button>
 

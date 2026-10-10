@@ -13,7 +13,7 @@
 
   // 狀態管理
   const state = {
-    fate: 'root', // 'root' | 'flower' | 'fruit' | 'shoot'
+    fate: 'root', // 'root' | 'root_growth' | 'flower' | 'fruit' | 'shoot'
     isPlaying: true,
     runMode: 'parallel', // 'parallel' (真實生理) | 'auto' (自動分步) | 'manual' (手動單步)
     isParallelMode: true, // 真實生理模式：日照時所有步驟動畫同時並行
@@ -33,6 +33,8 @@
     leafStarchCount: 0, // 葉綠體暫時性澱粉儲存量 (日間合成暫存，夜間水解轉運)
     autoLoopTargetStarch: 3, // 自動循環模式下日間累積暫存澱粉目標 (累積至 3 顆後轉入夜間轉運)
     rootStarchCount: 0,
+    rootGrowthCount: 0,        // 根系生長累計量 (支持細胞分裂、伸長與吸收能量)
+    rootGrowthPulse: 0,        // 根系生長/細胞分裂光波脈衝
     flowerEnergyCount: 0,
     fruitSugarCount: 0,
     shootEnergyCount: 0,
@@ -55,7 +57,7 @@
     lastTranspirationSpawn: 0,
 
     // 生理步驟即時解說字幕開關 (出現在 geo 畫布位置，可 toggle 顯示或隱藏)
-    showSubtitles: true,
+    showSubtitles: false,
 
     // 微觀放大圖開關
     showMicroscopicInset: false,
@@ -108,6 +110,7 @@
 
 
   const fateRootBtn = document.getElementById('fateRootBtn');
+  const fateRootGrowthBtn = document.getElementById('fateRootGrowthBtn');
   const fateFlowerBtn = document.getElementById('fateFlowerBtn');
   const fateFruitBtn = document.getElementById('fateFruitBtn');
   const fateShootBtn = document.getElementById('fateShootBtn');
@@ -162,13 +165,17 @@
     fruitBranchX: 960,
     fruitBranchY: 250,
 
-    // 庫器官 3：根部儲藏塊 (Root Tuber - 位於地下)
+    // 庫器官 3：根部儲藏塊 (Root Tuber - 位於地下右側)
     rootTuberX: 830,
     rootTuberY: 585,
 
     // 庫器官 4：頂端新葉芽 (Apical Shoot - 位於頂部)
     shootX: 690,
     shootY: 85,
+
+    // 庫器官 5：根系生長點 (Root Tip Growth - 位於地下主根末梢)
+    rootTipX: 690,
+    rootTipY: 665,
 
     // 生理步驟即時解說字幕條錨定座標 (Canvas Subtitle Bar)
     subtitleX: 660,
@@ -350,7 +357,7 @@
 
     if (state.runMode === 'parallel') {
       loopIndicator.className = 'loop-badge active parallel';
-      loopBadgeText.textContent = state.isDay ? '真實生理並行中' : '夜間接續轉運中';
+      loopBadgeText.textContent = state.isDay ? '同步進行中' : '夜間接續轉運中';
     } else if (state.runMode === 'auto') {
       loopIndicator.className = 'loop-badge active';
       loopBadgeText.textContent = state.isDay ? '自動分步中 (日間)' : '自動分步中 (夜間)';
@@ -638,6 +645,7 @@
 
         const destName = {
           root: '地下塊根 (即時儲藏)',
+          root_growth: '根系 (即時支持根尖生長與吸水)',
           flower: '花朵 (即時提供代謝與開花)',
           fruit: '果實 (即時積累果糖)',
           shoot: '頂芽 (即時支持分裂伸長)'
@@ -751,6 +759,7 @@
         if (totalToTransfer > 0) {
           const destName = {
             root: '地下塊根 (縮合儲存澱粉)',
+            root_growth: '根系 (細胞壁合成與根尖伸長)',
             flower: '花朵 (維持夜間代謝與花蜜)',
             fruit: '果實 (持續積累果糖)',
             shoot: '頂芽 (夜間細胞壁合成伸長)'
@@ -871,6 +880,13 @@
       y = geo.shootY - shootOffset - 22;
       color = '#a3e635';
       state.shootGrowthPulse = 1.0; // 觸發頂芽活躍生長光環
+    } else if (kind === 'root_growth' || kind === 'root_to_root_growth') {
+      text = `${prefix} ➔ 根系生長與細胞伸長${qtyStr} 🌱`;
+      x = geo.stemCenterX;
+      const rootOffset = Math.min(state.rootGrowthCount * 5, 25);
+      y = geo.rootTipY + rootOffset - 22;
+      color = '#4ade80';
+      state.rootGrowthPulse = 1.0; // 觸發根系活躍生長光環
     }
 
     state.conversions.push({
@@ -896,6 +912,9 @@
       if (batch.kind === 'root') {
         state.rootStarchCount += batch.amount;
         updateRemobilizeButtonStates();
+      } else if (batch.kind === 'root_growth') {
+        state.rootGrowthCount += batch.amount;
+        state.rootGrowthPulse = 1.0;
       } else if (batch.kind === 'flower' || batch.kind === 'root_to_flower') {
         state.flowerEnergyCount += batch.amount;
       } else if (batch.kind === 'fruit' || batch.kind === 'root_to_fruit') {
@@ -915,6 +934,7 @@
       if (batch.isDaytime) {
         const destName = {
           root: '地下塊根 (即時儲藏)',
+          root_growth: '根系 (即時支持根尖生長與吸水)',
           flower: '花朵 (即時提供代謝與開花)',
           fruit: '果實 (即時積累果糖)',
           shoot: '頂芽 (即時支持頂端分裂生長)'
@@ -925,16 +945,17 @@
         }
       }
       // 如果這是夜間轉運批次 (非根部再動員)
-      else if (batch.kind === 'root' || batch.kind === 'flower' || batch.kind === 'fruit' || batch.kind === 'shoot') {
+      else if (batch.kind === 'root' || batch.kind === 'root_growth' || batch.kind === 'flower' || batch.kind === 'fruit' || batch.kind === 'shoot') {
         const destName = {
           root: '地下塊根 (縮合儲存澱粉)',
+          root_growth: '根系 (細胞壁合成與根尖伸長)',
           flower: '花朵 (轉化花蜜與維持代謝)',
           fruit: '果實 (轉化果糖與果實膨大)',
           shoot: '頂芽 (細胞壁合成促進生長)'
         }[batch.kind] || '庫器官';
 
         if (state.runMode === 'parallel') {
-          updateLoopStatusUI(`【夜間接續轉運完成】暫存澱粉已水解送入${destName}！即將迎接清晨日照，展開新一輪真實生理反應...`);
+          updateLoopStatusUI(`【夜間接續轉運完成】暫存澱粉已水解送入${destName}！即將迎接清晨日照，展開新一輪同步生理反應...`);
           state.loopNextTimerId = scheduleTimer(() => {
             if (state.runMode === 'parallel') {
               state.loopCount++;
@@ -976,6 +997,9 @@
         if (batch.kind === 'root') {
           state.rootStarchCount += batch.amount;
           updateRemobilizeButtonStates();
+        } else if (batch.kind === 'root_growth') {
+          state.rootGrowthCount += batch.amount;
+          state.rootGrowthPulse = 1.0;
         } else if (batch.kind === 'flower' || batch.kind === 'root_to_flower') {
           state.flowerEnergyCount += batch.amount;
         } else if (batch.kind === 'fruit' || batch.kind === 'root_to_fruit') {
@@ -1005,6 +1029,17 @@
         ...baseWaypoints,
         { x: geo.phloemStemX, y: geo.soilY + 20 },
         { x: geo.rootTuberX, y: geo.rootTuberY }
+      ];
+    } else if (target === 'root_growth') {
+      const rootExtend = Math.min(state.rootGrowthCount * 5, 30);
+      const mainApexY = geo.h - 30 + rootExtend;
+      targetWaypoints = [
+        ...baseWaypoints,
+        { x: geo.phloemStemX, y: geo.soilY },
+        { x: geo.stemCenterX, y: geo.soilY },
+        { x: geo.stemCenterX - 6, y: geo.soilY + 60 },
+        { x: geo.stemCenterX + 6, y: geo.soilY + 110 },
+        { x: geo.stemCenterX, y: mainApexY }
       ];
     } else if (target === 'flower') {
       targetWaypoints = [
@@ -1188,7 +1223,7 @@
         highlightAllDaytimeEquations();
         state.stomaOpen = true;
         state.stomaAperture = 1.0;
-        updateLoopStatusUI('【真實生理並行中】日間光照：氣孔進碳、光解產氧、木質部蒸散流、即時蔗糖外運與澱粉蓄洪同時進行');
+        updateLoopStatusUI('【同步進行中】日間光照：氣孔進碳、光解產氧、木質部蒸散流、即時蔗糖外運與澱粉蓄洪同時進行');
       } else if (!fromStep) {
         if (state.isAutoMode) {
           scheduleTimer(() => {
@@ -1278,6 +1313,8 @@
     state.chloroplastPulse = 0;
     state.leafStarchCount = 0;
     state.rootStarchCount = 0;
+    state.rootGrowthCount = 0;
+    state.rootGrowthPulse = 0;
     state.flowerEnergyCount = 0;
     state.fruitSugarCount = 0;
     state.shootEnergyCount = 0;
@@ -1357,6 +1394,11 @@
     // 頂芽活躍生長光環脈動衰減
     if (state.shootGrowthPulse > 0) {
       state.shootGrowthPulse = Math.max(0, state.shootGrowthPulse - 0.015);
+    }
+
+    // 根系活躍生長光環脈動衰減
+    if (state.rootGrowthPulse > 0) {
+      state.rootGrowthPulse = Math.max(0, state.rootGrowthPulse - 0.015);
     }
 
     // 蒸散作用模式下持續由根部生成水分子流 (僅在日間照光時進行；約 92% 蒸散，約 8% 進入葉肉供光合作用)
@@ -1499,7 +1541,7 @@
             }
 
             if (state.leafStarchCount >= state.autoLoopTargetStarch) {
-              updateLoopStatusUI(`【真實生理並行中】日間暫存澱粉已蓄積達 ${state.leafStarchCount} 顆！即將進入夜間黑暗接續轉運...`);
+              updateLoopStatusUI(`【同步進行中】日間暫存澱粉已蓄積達 ${state.leafStarchCount} 顆！即將進入夜間黑暗接續轉運...`);
               scheduleTimer(() => {
                 if (state.runMode === 'parallel' && state.isDay) {
                   setDayNightMode(false, true);
@@ -1757,12 +1799,26 @@
     ctx.lineWidth = 2.2;
     ctx.stroke();
 
-    // 向上流動箭頭
-    ctx.fillStyle = '#bae6fd';
-    ctx.font = 'bold 15px sans-serif';
-    for (let y = topY + 50; y < btmY - 30; y += 45) {
-      ctx.fillText('↑', xPipeX - 5, y);
+    // 向量繪製木質部向上流動箭頭 (直接繪製向量箭頭，防止 iOS 轉為 Emoji 圖示)
+    ctx.save();
+    ctx.strokeStyle = '#bae6fd';
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (let y = topY + 45; y < btmY - 30; y += 46) {
+      // 垂直箭桿
+      ctx.beginPath();
+      ctx.moveTo(xPipeX, y + 6);
+      ctx.lineTo(xPipeX, y - 5);
+      ctx.stroke();
+      // 向上箭頭
+      ctx.beginPath();
+      ctx.moveTo(xPipeX - 4.5, y - 1.5);
+      ctx.lineTo(xPipeX, y - 7.5);
+      ctx.lineTo(xPipeX + 4.5, y - 1.5);
+      ctx.stroke();
     }
+    ctx.restore();
 
     // ----------------------------------------------------
     // 韌皮部篩管 (Phloem Sieve Tube) - 養分分流向下/向上
@@ -1777,19 +1833,39 @@
     ctx.lineWidth = 2.2;
     ctx.stroke();
 
-    // 流動箭頭
-    ctx.fillStyle = '#f3e8ff';
-    ctx.font = 'bold 15px sans-serif';
-    for (let y = topY + 70; y < btmY - 30; y += 45) {
-      ctx.fillText('↕', pPipeX - 5, y);
+    // 向量繪製韌皮部雙向流動箭頭 (直接繪製上下雙向向量箭頭，防止 iOS 將 ↕ 轉為 Emoji 圖示)
+    ctx.save();
+    ctx.strokeStyle = '#f3e8ff';
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (let y = topY + 45; y < btmY - 30; y += 46) {
+      // 垂直箭桿
+      ctx.beginPath();
+      ctx.moveTo(pPipeX, y - 5.5);
+      ctx.lineTo(pPipeX, y + 5.5);
+      ctx.stroke();
+      // 上方箭頭
+      ctx.beginPath();
+      ctx.moveTo(pPipeX - 4.5, y - 2);
+      ctx.lineTo(pPipeX, y - 7.5);
+      ctx.lineTo(pPipeX + 4.5, y - 2);
+      ctx.stroke();
+      // 下方箭頭
+      ctx.beginPath();
+      ctx.moveTo(pPipeX - 4.5, y + 2);
+      ctx.lineTo(pPipeX, y + 7.5);
+      ctx.lineTo(pPipeX + 4.5, y + 2);
+      ctx.stroke();
     }
+    ctx.restore();
 
     // ----------------------------------------------------
     // 木質部與韌皮部專屬大字高對比標籤 (由字幕按鈕管理)
     // ----------------------------------------------------
     if (state.showSubtitles) {
-      drawVascularLabel('【木質部】', '水分上行 ↑', 545, topY + 16, xPipeX, topY + 32, '#38bdf8', '#7dd3fc');
-      drawVascularLabel('【韌皮部】', '蔗糖輸導 ↕ (晝夜24h)', 835, topY + 22, pPipeX, topY + 36, '#c084fc', '#e9d5ff');
+      drawVascularLabel('【木質部】', '水分單向上行 (蒸散流)', 545, topY + 16, xPipeX, topY + 32, '#38bdf8', '#7dd3fc');
+      drawVascularLabel('【韌皮部】', '蔗糖雙向輸導 (晝夜24h)', 835, topY + 22, pPipeX, topY + 36, '#c084fc', '#e9d5ff');
 
       if (state.isTranspirationMode) {
         drawBigLabel('【蒸散拉力】水分由根部逆重力上升', geo.xylemStemX - 180, geo.soilY - 50, '#38bdf8', 14);
@@ -2055,21 +2131,76 @@
     ctx.restore();
   }
 
-  // 繪製地下根系與庫器官 3：澱粉儲藏組織 (Root & Starch Tuber)
+  // 繪製地下根系、澱粉儲藏組織與根系生長點 (Root, Tuber & Root Tip Meristem)
   function drawRootsAndTuber() {
     ctx.save();
-    ctx.strokeStyle = '#b45309';
+
+    // 根系生長延伸量 (主根向下伸長)
+    const rootExtend = Math.min(state.rootGrowthCount * 5, 30);
+    const mainApexY = geo.h - 30 + rootExtend;
+
+    // 所有根系統一使用自然根系深棕色 (主根、新生側根、吸水側根)
+    const rootColor = '#b45309';
+
+    ctx.strokeStyle = rootColor;
     ctx.lineWidth = 5;
     ctx.lineCap = 'round';
 
-    // 主根
+    // 主根 (包含生長向下延伸)
     ctx.beginPath();
     ctx.moveTo(geo.stemCenterX, geo.soilY);
-    ctx.bezierCurveTo(geo.stemCenterX - 10, geo.soilY + 60, geo.stemCenterX + 10, geo.soilY + 110, geo.stemCenterX, geo.h - 30);
+    ctx.bezierCurveTo(geo.stemCenterX - 10, geo.soilY + 60, geo.stemCenterX + 10, geo.soilY + 110, geo.stemCenterX, mainApexY);
     ctx.stroke();
 
-    // 吸水側根 (連通木質部)
-    ctx.strokeStyle = '#0284c7';
+    // 側根分支群 (隨 rootGrowthCount 增加，根系不僅延長，更持續萌生新側根與二級分支，顯著增加根數量)
+    const lateralRootBranches = [
+      // tier 1: 第一批初生側根 (左右各一)
+      { tier: 1, sx: geo.stemCenterX - 4, sy: geo.soilY + 95, cx: geo.stemCenterX - 24, cy: geo.soilY + 115, ex: geo.stemCenterX - 48, ey: geo.soilY + 132, w: 3.5 },
+      { tier: 1, sx: geo.stemCenterX + 6, sy: geo.soilY + 110, cx: geo.stemCenterX + 25, cy: geo.soilY + 130, ex: geo.stemCenterX + 45, ey: geo.soilY + 148, w: 3.5 },
+      // tier 2: 第二批側根 (深層展開及中高層展開，增加根系數量)
+      { tier: 2, sx: geo.stemCenterX - 5, sy: geo.soilY + 138, cx: geo.stemCenterX - 30, cy: geo.soilY + 160, ex: geo.stemCenterX - 58, ey: geo.soilY + 178, w: 3.2 },
+      { tier: 2, sx: geo.stemCenterX + 4, sy: geo.soilY + 75, cx: geo.stemCenterX + 22, cy: geo.soilY + 92, ex: geo.stemCenterX + 38, ey: geo.soilY + 106, w: 3.0 },
+      // tier 3: 第三批側根與二級分枝 (側根進一步分叉，增進吸收表面積)
+      { tier: 3, sx: geo.stemCenterX - 28, sy: geo.soilY + 115, cx: geo.stemCenterX - 38, cy: geo.soilY + 135, ex: geo.stemCenterX - 52, ey: geo.soilY + 152, w: 2.3 },
+      { tier: 3, sx: geo.stemCenterX + 6, sy: geo.soilY + 155, cx: geo.stemCenterX + 30, cy: geo.soilY + 175, ex: geo.stemCenterX + 54, ey: geo.soilY + 192, w: 3.0 },
+      // tier 4: 第四批側根 (深層側根與更多分枝)
+      { tier: 4, sx: geo.stemCenterX - 35, sy: geo.soilY + 158, cx: geo.stemCenterX - 48, cy: geo.soilY + 175, ex: geo.stemCenterX - 66, ey: geo.soilY + 188, w: 2.2 },
+      { tier: 4, sx: geo.stemCenterX - 3, sy: geo.soilY + 175, cx: geo.stemCenterX - 22, cy: geo.soilY + 195, ex: geo.stemCenterX - 42, ey: geo.soilY + 212, w: 2.6 },
+      // tier 5+: 第五批側根 (茂盛鬚根與深層幼嫩側根)
+      { tier: 5, sx: geo.stemCenterX + 28, sy: geo.soilY + 130, cx: geo.stemCenterX + 42, cy: geo.soilY + 148, ex: geo.stemCenterX + 58, ey: geo.soilY + 164, w: 2.0 },
+      { tier: 5, sx: geo.stemCenterX + 4, sy: geo.soilY + 192, cx: geo.stemCenterX + 22, cy: geo.soilY + 210, ex: geo.stemCenterX + 38, ey: geo.soilY + 224, w: 2.4 }
+    ];
+
+    for (const b of lateralRootBranches) {
+      if (state.rootGrowthCount >= b.tier) {
+        // 生長進度 (0.0 ~ 1.0)
+        const prog = Math.min((state.rootGrowthCount - b.tier + 1) * 0.45, 1.0);
+        const curEx = b.sx + (b.ex - b.sx) * prog;
+        const curEy = b.sy + (b.ey - b.sy) * prog;
+        const curCx = b.sx + (b.cx - b.sx) * prog;
+        const curCy = b.sy + (b.cy - b.sy) * prog;
+
+        ctx.strokeStyle = rootColor;
+        ctx.lineWidth = b.w;
+        ctx.beginPath();
+        ctx.moveTo(b.sx, b.sy);
+        ctx.quadraticCurveTo(curCx, curCy, curEx, curEy);
+        ctx.stroke();
+
+        // 側根端點幼嫩生長點 (生長脈衝活躍時微光)
+        if (state.rootGrowthPulse > 0 && prog < 1.0) {
+          ctx.save();
+          ctx.fillStyle = '#4ade80';
+          ctx.beginPath();
+          ctx.arc(curEx, curEy, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
+
+    // 吸水側根 (連通木質部) - 所有根系均使用相同的根系顏色
+    ctx.strokeStyle = rootColor;
     ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.moveTo(geo.xylemStemX, geo.soilY + 20);
@@ -2083,16 +2214,49 @@
 
     // 根毛吸水區專屬大字標籤 (由字幕按鈕統一管理)
     if (state.showSubtitles) {
-      drawVascularLabel('【根毛吸水區】', '水分由此進入木質部 ↑', 410, geo.soilY + 125, geo.xylemStemX - 100, geo.soilY + 80, '#38bdf8', '#7dd3fc', 160);
+      drawVascularLabel('【根毛吸水區】', '水分由此進入木質部', 410, geo.soilY + 125, geo.xylemStemX - 100, geo.soilY + 80, '#38bdf8', '#7dd3fc', 160);
     }
 
-    // 韌皮部通往澱粉塊根 (連通韌皮部)
-    ctx.strokeStyle = '#a855f7';
+    // 送往澱粉塊根之地下路徑 (使用與根系完全統一的自然顏色)
+    ctx.strokeStyle = rootColor;
     ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.moveTo(geo.phloemStemX, geo.soilY + 20);
     ctx.quadraticCurveTo(geo.phloemStemX + 40, geo.soilY + 45, geo.rootTuberX, geo.rootTuberY);
     ctx.stroke();
+
+    // 繪製根尖分生組織與生長點 (Root Apical Meristem)
+    const isRootGrowthTarget = state.fate === 'root_growth';
+    const rootGlow = (state.rootGrowthPulse || 0) + (isRootGrowthTarget ? 0.35 : 0);
+
+    ctx.save();
+    if (rootGlow > 0) {
+      ctx.shadowColor = '#4ade80';
+      ctx.shadowBlur = 14 * rootGlow;
+    }
+    ctx.fillStyle = isRootGrowthTarget || state.rootGrowthCount > 0 ? '#4ade80' : '#b45309';
+    ctx.beginPath();
+    ctx.ellipse(geo.stemCenterX, mainApexY, 7, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#22c55e';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.restore();
+
+    // 根尖生長脈動光環
+    if (state.rootGrowthPulse > 0) {
+      ctx.save();
+      const pR = 14 + state.rootGrowthPulse * 22;
+      ctx.strokeStyle = `rgba(74, 222, 128, ${state.rootGrowthPulse * 0.9})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(geo.stemCenterX, mainApexY, pR, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 根系生長大字標籤 (18px bold)
+    drawBigLabel(`根系生長 (伸長與增根 x${state.rootGrowthCount})`, geo.stemCenterX - 95, mainApexY + 20, isRootGrowthTarget ? '#86efac' : '#cbd5e1', 17);
 
     // 澱粉塊根 (隨澱粉累積膨大)
     const tuberSize = Math.min(30 + state.rootStarchCount * 8, 66);
@@ -2109,8 +2273,8 @@
     ctx.lineWidth = 3;
     ctx.stroke();
 
-    // 根部大字標籤 (20px bold)
-    drawBigLabel(`根部 (澱粉儲藏組織 x${state.rootStarchCount})`, geo.rootTuberX - 90, geo.rootTuberY + tuberSize + 25, '#ffffff', 20);
+    // 塊根大字標籤 (20px bold)
+    drawBigLabel(`塊根 (澱粉儲藏組織 x${state.rootStarchCount})`, geo.rootTuberX - 90, geo.rootTuberY + tuberSize + 25, '#ffffff', 20);
 
     // 在根部內部畫出澱粉顆粒
     if (state.rootStarchCount > 0) {
@@ -2653,7 +2817,7 @@
     } else if (state.isParallelMode) {
       if (state.isDay) {
         curStepNum = 'parallel_day';
-        title = `日間全反應並行：氣孔進碳、光解產氧、蒸散流、即時蔗糖外運與澱粉蓄洪 (${state.leafStarchCount}/${state.autoLoopTargetStarch})`;
+        title = `日間同步進行：氣孔進碳、光解產氧、蒸散流、即時蔗糖外運與澱粉蓄洪 (${state.leafStarchCount}/${state.autoLoopTargetStarch})`;
         targetName = '葉綠體與全株庫器官';
         organX = geo.chloroplastX;
         organY = geo.chloroplastY;
@@ -2662,13 +2826,14 @@
         title = `夜間黑暗：氣孔閉合，葉綠體水解 ${state.leafStarchCount} 顆暫存澱粉為蔗糖持續外運`;
         const destName = {
           root: '塊根 (儲藏)',
+          root_growth: '根系 (生長)',
           flower: '花朵 (花蜜)',
           fruit: '果實 (膨大)',
           shoot: '頂芽 (生長)'
         }[state.fate] || '目標庫器官';
         targetName = destName;
-        organX = state.fate === 'flower' ? geo.flowerX : (state.fate === 'fruit' ? geo.fruitBranchX : (state.fate === 'shoot' ? geo.shootX : geo.rootTuberX));
-        organY = state.fate === 'flower' ? geo.flowerY : (state.fate === 'fruit' ? geo.fruitBranchY : (state.fate === 'shoot' ? geo.shootY : geo.rootTuberY));
+        organX = state.fate === 'flower' ? geo.flowerX : (state.fate === 'fruit' ? geo.fruitBranchX : (state.fate === 'shoot' ? geo.shootX : (state.fate === 'root_growth' ? geo.stemCenterX : geo.rootTuberX)));
+        organY = state.fate === 'flower' ? geo.flowerY : (state.fate === 'fruit' ? geo.fruitBranchY : (state.fate === 'shoot' ? geo.shootY : (state.fate === 'root_growth' ? geo.rootTipY : geo.rootTuberY)));
       }
     } else {
       curStepNum = (state.currentStep >= 1 && state.currentStep <= 8) ? state.currentStep : (state.isDay ? 1 : 7);
@@ -2693,6 +2858,10 @@
           organX = geo.shootX;
           organY = geo.shootY - Math.min(state.shootEnergyCount * 9, 45);
           targetName = curStepNum === 5 ? '頂芽 (日間即時生長)' : '頂芽 (夜間接續生長)';
+        } else if (state.fate === 'root_growth') {
+          organX = geo.stemCenterX;
+          organY = geo.rootTipY;
+          targetName = curStepNum === 5 ? '根系 (日間即時生長)' : '根系 (夜間接續伸長)';
         } else {
           organX = geo.rootTuberX;
           organY = geo.rootTuberY;
@@ -2810,7 +2979,7 @@
     if (curStepNum === 0) {
       badgeLabel = '蒸散作用';
     } else if (curStepNum === 'parallel_day') {
-      badgeLabel = '真實生理';
+      badgeLabel = '同步';
     } else if (curStepNum === 'parallel_night') {
       badgeLabel = '夜間轉運';
     }
@@ -3155,11 +3324,18 @@
     }
     resetBtn.onclick = resetDemo;
 
-    // 葡萄糖去向切換 (根 / 花 / 果)
+    // 葡萄糖去向切換 (塊根 / 根系 / 花 / 果 / 頂芽)
     fateRootBtn.onclick = () => {
       state.fate = 'root';
       updateFateButtons();
     };
+
+    if (fateRootGrowthBtn) {
+      fateRootGrowthBtn.onclick = () => {
+        state.fate = 'root_growth';
+        updateFateButtons();
+      };
+    }
 
     fateFlowerBtn.onclick = () => {
       state.fate = 'flower';
@@ -3186,10 +3362,39 @@
     if (rootToShootBtn) {
       rootToShootBtn.onclick = () => remobilizeRootNutrient('shoot');
     }
+
+    // 防止平板與觸控裝置連續點擊造成視窗放大 (Double-tap to zoom)
+    let lastTouchEndTime = 0;
+    document.addEventListener('touchend', (e) => {
+      const now = Date.now();
+      if (now - lastTouchEndTime <= 350) {
+        // 阻止瀏覽器預設的雙擊放大視圖行為
+        e.preventDefault();
+        // 若使用者連點的是按鈕或控制項，手動觸發點擊確保不漏失點擊操作
+        const btn = e.target.closest('button, [role="button"], a');
+        if (btn && typeof btn.click === 'function') {
+          btn.click();
+        }
+      }
+      lastTouchEndTime = now;
+    }, { passive: false });
+
+    // 防止平板多指觸控縮放 (Pinch-to-zoom)
+    document.addEventListener('touchstart', (e) => {
+      if (e.touches && e.touches.length > 1) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    // 防止 Safari 專屬手勢事件縮放視窗
+    document.addEventListener('gesturestart', (e) => e.preventDefault());
+    document.addEventListener('gesturechange', (e) => e.preventDefault());
+    document.addEventListener('gestureend', (e) => e.preventDefault());
   }
 
   function updateFateButtons() {
     fateRootBtn.classList.toggle('active', state.fate === 'root');
+    if (fateRootGrowthBtn) fateRootGrowthBtn.classList.toggle('active', state.fate === 'root_growth');
     fateFlowerBtn.classList.toggle('active', state.fate === 'flower');
     fateFruitBtn.classList.toggle('active', state.fate === 'fruit');
     fateShootBtn.classList.toggle('active', state.fate === 'shoot');

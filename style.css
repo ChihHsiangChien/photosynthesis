@@ -41,6 +41,10 @@ html, body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* ==========================================================================
@@ -151,6 +155,14 @@ html, body {
   height: 100%;
   object-fit: contain;
   display: block;
+  touch-action: none; /* 禁用畫布上的預設雙擊放大與雙指縮放 */
+}
+
+button, .seg-btn, .step-btn-lg, .transpiration-btn-lg, .secondary-btn-lg, .fate-btn-lg, .remobilize-btn {
+  touch-action: manipulation; /* 確保按鈕支援快速連續點擊且不觸發頁面放大 */
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* ==========================================================================
@@ -719,6 +731,13 @@ html, body {
   box-shadow: 0 0 16px rgba(168, 85, 247, 0.4);
 }
 #fateRootBtn.active .fate-info strong { color: #f3e8ff; }
+
+#fateRootGrowthBtn.active {
+  background: linear-gradient(135deg, rgba(5, 150, 105, 0.45), rgba(16, 185, 129, 0.45));
+  border-color: #34d399;
+  box-shadow: 0 0 16px rgba(52, 211, 153, 0.4);
+}
+#fateRootGrowthBtn.active .fate-info strong { color: #d1fae5; }
 
 #fateFlowerBtn.active {
   background: linear-gradient(135deg, rgba(190, 24, 93, 0.45), rgba(236, 72, 153, 0.45));
